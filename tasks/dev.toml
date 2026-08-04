@@ -5,7 +5,7 @@
 # (not PowerShell/cmd), and install the mingw-w64 toolchain. `brew` is only
 # used on macOS for the mingw-w64 cross-compiler.
 
-["setup"]
+["env:setup"]
 description = "One-time: install all dev deps for this platform (Go tools + OS packages)"
 dir = "{{config_root}}/myapp"
 run = """
@@ -50,8 +50,8 @@ esac
 command -v gomobile >/dev/null 2>&1 && gomobile init || true
 """
 
-["uninstall"]
-description = "Remove everything 'setup' installs (Go tools + OS packages) — the exact inverse"
+["env:uninstall"]
+description = "Remove everything 'env:setup' installs (Go tools + OS packages) — the exact inverse"
 dir = "{{config_root}}/myapp"
 run = """
 gobin="$(go env GOBIN 2>/dev/null || echo "$(go env GOPATH)/bin")"
@@ -87,7 +87,7 @@ case "$(uname -s)" in
 esac
 """
 
-["uninstall:android"]
+["env:uninstall:android"]
 description = "Remove the Android SDK + cmdline-tools installed for Android builds"
 dir = "{{config_root}}/myapp"
 run = """
@@ -118,7 +118,7 @@ else
 fi
 """
 
-["dev"]
+["serve:dev"]
 description = "Start irgo dev server (hot reload) — requires entr (brew install entr)"
 dir = "{{config_root}}/myapp"
 run = "irgo dev"
@@ -138,12 +138,12 @@ description = "Watch Tailwind CSS sources"
 dir = "{{config_root}}/myapp"
 run = "bun run css:watch"
 
-["templ"]
+["build:templ"]
 description = "Generate _templ.go from *.templ templates"
 dir = "{{config_root}}/myapp"
 run = "irgo templ"
 
-["test"]
+["check:test"]
 description = "Run Go tests"
 dir = "{{config_root}}/myapp"
 run = "go test ./..."
@@ -246,7 +246,7 @@ description = "Build iOS framework (gomobile bind → build/ios/Irgo.xcframework
 dir = "{{config_root}}/myapp"
 run = """
 if ! command -v gomobile >/dev/null 2>&1; then
-  echo "gomobile not found — run 'mise run setup' first"
+  echo "gomobile not found — run 'mise run env:setup' first"
   exit 1
 fi
 # Self-heal stale go.work: it references a temp x/mobile clone that macOS may
@@ -280,7 +280,7 @@ description = "Build iOS app for simulator, Debug config (framework + xcodebuild
 dir = "{{config_root}}/myapp"
 run = """
 if ! command -v gomobile >/dev/null 2>&1; then
-  echo "gomobile not found — run 'mise run setup' first"
+  echo "gomobile not found — run 'mise run env:setup' first"
   exit 1
 fi
 # Self-heal stale go.work (see build:ios)
@@ -316,7 +316,7 @@ description = "Build + launch iOS app on Simulator (prod-style: embedded Go, no 
 dir = "{{config_root}}/myapp"
 run = """
 if ! command -v gomobile >/dev/null 2>&1; then
-  echo "gomobile not found — run 'mise run setup' first"
+  echo "gomobile not found — run 'mise run env:setup' first"
   exit 1
 fi
 # Self-heal stale go.work (see build:ios)
@@ -349,11 +349,11 @@ description = "Build + launch iOS app on Simulator in DEV MODE (hot reload via a
 dir = "{{config_root}}/myapp"
 run = """
 if ! command -v gomobile >/dev/null 2>&1; then
-  echo "gomobile not found — run 'mise run setup' first"
+  echo "gomobile not found — run 'mise run env:setup' first"
   exit 1
 fi
 if ! command -v air >/dev/null 2>&1; then
-  echo "air not found — run 'mise run setup' first"
+  echo "air not found — run 'mise run env:setup' first"
   exit 1
 fi
 # Self-heal stale go.work (see build:ios)
@@ -386,7 +386,7 @@ description = "Build iOS app for device/App Store (Release) — requires Apple D
 dir = "{{config_root}}/myapp"
 run = """
 if ! command -v gomobile >/dev/null 2>&1; then
-  echo "gomobile not found — run 'mise run setup' first"
+  echo "gomobile not found — run 'mise run env:setup' first"
   exit 1
 fi
 # Self-heal stale go.work (see build:ios)

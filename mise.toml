@@ -3,7 +3,7 @@
 # node for Tailwind CLI + frontend tooling, bun for the CSS build
 #
 # Go-installed tools (irgo, templ, air, gomobile) and OS packages (entr,
-# mingw-w64, Xcode) are NOT managed by mise — run `mise run setup` once.
+# mingw-w64, Xcode) are NOT managed by mise — run `mise run env:setup` once.
 
 [task_config]
 includes = ["tasks/dev.toml"]
