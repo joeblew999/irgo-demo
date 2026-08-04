@@ -49,6 +49,7 @@ Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (build
 | Task            | Description                                        |
 |-----------------|----------------------------------------------------|
 | `mise run env:setup`| One-time: install all dev deps (Go tools + OS pkgs)|
+| `mise run env:tools`| Install pinned Go tools (irgo/templ/air/gomobile) |
 | `mise run env:uninstall`| Remove everything `env:setup` installed (inverse) |
 | `mise run env:uninstall:android`| Remove Android SDK + cmdline-tools |
 | `mise run serve`| Web server, no file watching (pure mise)           |
@@ -57,6 +58,7 @@ Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (build
 | `mise run css:watch`| Watch Tailwind CSS sources                    |
 | `mise run build:web`     | Build web server binary                    |
 | `mise run build:templ`   | Generate `_templ.go` from `*.templ`         |
+| `mise run build:assets`  | Generate templ + build CSS (run before any build) |
 | `mise run build:desktop` | Build desktop app for current platform (auto-detects OS) |
 | `mise run build:desktop:windows` | Build Windows exe (cross-compiles on macOS) |
 | `mise run build:desktop:linux`   | Build Linux app (native Linux only)     |

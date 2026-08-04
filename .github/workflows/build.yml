@@ -1,11 +1,15 @@
 # Builds all targets: Go tests, Linux/macOS/Windows desktop, iOS.
 #
-# Critical gotchas handled here (verified against irgo + this repo):
-#   1. _templ.go files are gitignored  -> must run `mise run build:templ` first
-#   2. static/css/output.css is gitignored and EMBEDDED into apps
-#      (static/embed.go)              -> must run `bun install && mise run css` first
-#   3. webview_go links webkit2gtk-4.0 -> use ubuntu-22.04 (not 24.04)
-#   4. iOS device/App Store builds need signing -> gated behind secrets.IOS_TEAM_ID
+# Tooling and gitignored-but-embedded artifacts are handled by mise tasks
+# (single source of truth, shared with local dev):
+#   - `mise run build:assets` installs pinned Go tools (depends env:tools)
+#     then generates templ + builds CSS
+#   - `mise run build:desktop:linux|all`, `build:ios:sim` do the builds
+#
+# Gotchas handled by those tasks / this file:
+#   1. _templ.go + output.css are gitignored but required/embedded -> build:assets
+#   2. webview_go links webkit2gtk-4.0 -> use ubuntu-22.04 (not 24.04)
+#   3. iOS device/App Store builds need signing -> gated behind IOS_TEAM_ID secret
 
 name: build
 
@@ -19,11 +23,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Pinned to go.mod to avoid @latest drift (irgo v0.3.1, templ v0.3.977)
-env:
-  IRGO_VERSION: v0.3.1
-  TEMPL_VERSION: v0.3.977
-
 jobs:
   check:
     name: Go tests
@@ -33,12 +32,8 @@ jobs:
       - uses: jdx/mise-action@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Go tools (pinned)
-        run: |
-          go install github.com/stukennedy/irgo/cmd/irgo@${{ env.IRGO_VERSION }}
-          go install github.com/a-h/templ/cmd/templ@${{ env.TEMPL_VERSION }}
-      - name: Generate templ (gitignored, required before compile)
-        run: mise run build:templ
+      - name: Install tools + generate templ + build CSS
+        run: mise run build:assets
       - name: Run Go tests
         run: mise run check:test
 
@@ -54,15 +49,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
-      - name: Install Go tools (pinned)
-        run: |
-          go install github.com/stukennedy/irgo/cmd/irgo@${{ env.IRGO_VERSION }}
-          go install github.com/a-h/templ/cmd/templ@${{ env.TEMPL_VERSION }}
-      - name: Generate templ + build CSS (both gitignored, embedded in app)
-        run: |
-          cd myapp && bun install
-          mise run build:templ
-          mise run css
+      - name: Install tools + generate templ + build CSS (gitignored, embedded)
+        run: mise run build:assets
       - name: Build Linux app
         run: mise run build:desktop:linux
       - uses: actions/upload-artifact@v4
@@ -79,15 +67,8 @@ jobs:
       - uses: jdx/mise-action@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Go tools (pinned)
-        run: |
-          go install github.com/stukennedy/irgo/cmd/irgo@${{ env.IRGO_VERSION }}
-          go install github.com/a-h/templ/cmd/templ@${{ env.TEMPL_VERSION }}
-      - name: Generate templ + build CSS
-        run: |
-          cd myapp && bun install
-          mise run build:templ
-          mise run css
+      - name: Install tools + generate templ + build CSS
+        run: mise run build:assets
       - name: Build macOS + Windows apps (task auto-installs mingw-w64 via brew)
         run: mise run build:desktop:all
       - uses: actions/upload-artifact@v4
@@ -106,16 +87,8 @@ jobs:
       - uses: jdx/mise-action@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Go tools (pinned)
-        run: |
-          go install github.com/stukennedy/irgo/cmd/irgo@${{ env.IRGO_VERSION }}
-          go install github.com/a-h/templ/cmd/templ@${{ env.TEMPL_VERSION }}
-          go install golang.org/x/mobile/cmd/gomobile@latest
-      - name: Generate templ + build CSS
-        run: |
-          cd myapp && bun install
-          mise run build:templ
-          mise run css
+      - name: Install tools + generate templ + build CSS
+        run: mise run build:assets
       - name: Build iOS framework + simulator app
         run: mise run build:ios:sim
       - uses: actions/upload-artifact@v4
@@ -147,16 +120,8 @@ jobs:
       - uses: jdx/mise-action@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Go tools (pinned)
-        run: |
-          go install github.com/stukennedy/irgo/cmd/irgo@${{ env.IRGO_VERSION }}
-          go install github.com/a-h/templ/cmd/templ@${{ env.TEMPL_VERSION }}
-          go install golang.org/x/mobile/cmd/gomobile@latest
-      - name: Generate templ + build CSS
-        run: |
-          cd myapp && bun install
-          mise run build:templ
-          mise run css
+      - name: Install tools + generate templ + build CSS
+        run: mise run build:assets
       # Signing: add a Distribution cert + provisioning profile to the runner
       # keychain (e.g. via apple-actions/import-codesign-certs) and set the
       # IOS_TEAM_ID secret. Without it this job is skipped.

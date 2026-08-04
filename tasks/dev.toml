@@ -5,14 +5,15 @@
 # (not PowerShell/cmd), and install the mingw-w64 toolchain. `brew` is only
 # used on macOS for the mingw-w64 cross-compiler.
 
-["env:setup"]
-description = "One-time: install all dev deps for this platform (Go tools + OS packages)"
+["env:tools"]
+description = "Install pinned Go tools (irgo/templ/air/gomobile) — versions match go.mod, idempotent"
 dir = "{{config_root}}/myapp"
 run = """
-# Go-installed tools (idempotent — skips anything already on PATH)
+# Pinned to go.mod to avoid @latest drift: the irgo CLI must match the go.mod
+# irgo version, and the templ generator must match the templ library version.
 for entry in \
-  "irgo|github.com/stukennedy/irgo/cmd/irgo@latest" \
-  "templ|github.com/a-h/templ/cmd/templ@latest" \
+  "irgo|github.com/stukennedy/irgo/cmd/irgo@v0.3.1" \
+  "templ|github.com/a-h/templ/cmd/templ@v0.3.977" \
   "air|github.com/air-verse/air@latest" \
   "gomobile|golang.org/x/mobile/cmd/gomobile@latest"; do
   name="${entry%%|*}"; pkg="${entry#*|}"
@@ -23,8 +24,14 @@ for entry in \
     echo "$name: already installed"
   fi
 done
+"""
 
-# OS-level packages, per platform
+["env:setup"]
+description = "One-time: install all dev deps for this platform (Go tools + OS packages)"
+depends = ["env:tools"]
+dir = "{{config_root}}/myapp"
+run = """
+# OS-level packages, per platform (Go tools come from env:tools)
 case "$(uname -s)" in
   Darwin)
     for pkg in entr mingw-w64; do
@@ -142,6 +149,16 @@ run = "bun run css:watch"
 description = "Generate _templ.go from *.templ templates"
 dir = "{{config_root}}/myapp"
 run = "irgo templ"
+
+["build:assets"]
+description = "Generate templ + build Tailwind CSS (both gitignored but embedded — run before any build)"
+depends = ["env:tools"]
+dir = "{{config_root}}/myapp"
+run = """
+bun install
+irgo templ
+bun run css
+"""
 
 ["check:test"]
 description = "Run Go tests"
