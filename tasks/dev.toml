@@ -167,16 +167,16 @@ echo "Installing Android SDK components (platform-tools, platform, build-tools, 
   "platform-tools" \
   "platforms;android-35" \
   "build-tools;35.0.0" \
-  "ndk;27.0.12077973"
+  "ndk;26.3.11579264"
 
-# Initialize gomobile with the NDK (so Android bind works)
-ndk_dir="$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | head -1)"
-if [ -n "$ndk_dir" ]; then
-  export ANDROID_NDK_HOME="$ndk_dir"
+# Pin the NDK explicitly. NDK r26 is required: gomobile defaults to API 16
+# and NDK r27+ dropped support below API 21 ("unsupported API version 16").
+export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/26.3.11579264"
+if [ -d "$ANDROID_NDK_HOME" ]; then
   echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
   command -v gomobile >/dev/null 2>&1 && gomobile init 2>&1 | tail -3 || true
 else
-  echo "NDK not found in $ANDROID_HOME/ndk — Android build may fail." >&2
+  echo "NDK not found at $ANDROID_NDK_HOME — Android build may fail." >&2
 fi
 """
 
@@ -534,11 +534,11 @@ if ! command -v gomobile >/dev/null 2>&1; then
   exit 1
 fi
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-if [ -z "$ANDROID_NDK_HOME" ]; then
-  export ANDROID_NDK_HOME="$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | head -1)"
-fi
-if [ -z "$ANDROID_NDK_HOME" ] || [ ! -d "$ANDROID_NDK_HOME" ]; then
-  echo "Android NDK not found — run 'mise run env:setup:android' first" >&2
+# Pin NDK r26 (see env:setup:android) — globbing can pick a different NDK
+# (e.g. a runner-preinstalled r27) that gomobile rejects.
+export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/26.3.11579264}"
+if [ ! -d "$ANDROID_NDK_HOME" ]; then
+  echo "Android NDK not found at $ANDROID_NDK_HOME — run 'mise run env:setup:android' first" >&2
   exit 1
 fi
 # Self-heal stale go.work (see build:ios)
