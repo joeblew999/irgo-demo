@@ -564,5 +564,11 @@ if [ -f go.work ]; then
     rm -f go.work go.work.sum
   fi
 fi
-irgo build android
+irgo templ
+# irgo's mobile setup creates go.work + installs gomobile/gobind from source.
+# Its built-in bind defaults to API 16, which modern NDKs (r26/r27: 21..3x)
+# reject with "unsupported API version 16" — so we ignore that failure and run
+# the real bind ourselves with the API level the NDK actually supports.
+irgo build android || true
+gomobile bind -target android -androidapi 21 -o build/android/irgo.aar ./mobile
 """
