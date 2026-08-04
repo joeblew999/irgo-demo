@@ -244,7 +244,7 @@ xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
 """
 
 ["run:ios"]
-description = "Build and launch iOS app on the Simulator (dev mode uses hot reload)"
+description = "Build + launch iOS app on Simulator (prod-style: embedded Go, no dev server)"
 dir = "{{config_root}}/myapp"
 run = """
 if ! command -v gomobile >/dev/null 2>&1; then
@@ -274,4 +274,80 @@ if [ -f go.work ]; then
   fi
 fi
 irgo run ios
+"""
+
+["run:ios:dev"]
+description = "Build + launch iOS app on Simulator in DEV MODE (hot reload via air)"
+dir = "{{config_root}}/myapp"
+run = """
+if ! command -v gomobile >/dev/null 2>&1; then
+  echo "gomobile not found — run 'mise run setup' first"
+  exit 1
+fi
+if ! command -v air >/dev/null 2>&1; then
+  echo "air not found — run 'mise run setup' first"
+  exit 1
+fi
+# Self-heal stale go.work (see build:ios)
+if [ -f go.work ]; then
+  stale=0
+  in_use=0
+  while IFS= read -r line; do
+    case "$line" in
+      "use (") in_use=1 ;;
+      ")") in_use=0 ;;
+      "."|"") ;;
+      *)
+        if [ "$in_use" = "1" ]; then
+          p=$(printf '%s' "$line" | tr -d '[:space:]')
+          [ -d "$p" ] || { echo "go.work references missing dir: $p"; stale=1; }
+        fi
+        ;;
+    esac
+  done < go.work
+  if [ "$stale" = "1" ]; then
+    echo "Removing stale go.work (irgo regenerates it on next build)..."
+    rm -f go.work go.work.sum
+  fi
+fi
+irgo run ios --dev
+"""
+
+["build:ios:prod"]
+description = "Build iOS app for device/App Store (Release) — requires Apple Developer signing"
+dir = "{{config_root}}/myapp"
+run = """
+if ! command -v gomobile >/dev/null 2>&1; then
+  echo "gomobile not found — run 'mise run setup' first"
+  exit 1
+fi
+# Self-heal stale go.work (see build:ios)
+if [ -f go.work ]; then
+  stale=0
+  in_use=0
+  while IFS= read -r line; do
+    case "$line" in
+      "use (") in_use=1 ;;
+      ")") in_use=0 ;;
+      "."|"") ;;
+      *)
+        if [ "$in_use" = "1" ]; then
+          p=$(printf '%s' "$line" | tr -d '[:space:]')
+          [ -d "$p" ] || { echo "go.work references missing dir: $p"; stale=1; }
+        fi
+        ;;
+    esac
+  done < go.work
+  if [ "$stale" = "1" ]; then
+    echo "Removing stale go.work (irgo regenerates it on next build)..."
+    rm -f go.work go.work.sum
+  fi
+fi
+irgo build ios
+# Release build for physical devices. Signing comes from the Xcode project or
+# pass a team via extra args, e.g.:
+#   mise run build:ios:prod -- -DEVELOPMENT_TEAM=ABCDE12345
+xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
+  -configuration Release -destination 'generic/platform=iOS' \
+  -derivedDataPath build/ios/DerivedData-Release build
 """
