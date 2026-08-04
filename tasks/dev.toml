@@ -50,6 +50,74 @@ esac
 command -v gomobile >/dev/null 2>&1 && gomobile init || true
 """
 
+["uninstall"]
+description = "Remove everything 'setup' installs (Go tools + OS packages) — the exact inverse"
+dir = "{{config_root}}/myapp"
+run = """
+gobin="$(go env GOBIN 2>/dev/null || echo "$(go env GOPATH)/bin")"
+echo "Removing Go-installed tools from $gobin..."
+for tool in irgo templ air gomobile gobind; do
+  if [ -f "$gobin/$tool" ]; then
+    echo "  removing $tool"
+    rm -f "$gobin/$tool"
+  fi
+done
+
+# Remove the temp x/mobile clone and local go.work created by irgo mobile builds
+rm -rf "${TMPDIR:-/tmp}/golang-mobile" 2>/dev/null || true
+rm -f go.work go.work.sum
+
+case "$(uname -s)" in
+  Darwin)
+    echo "Removing brew packages (entr, mingw-w64)..."
+    brew uninstall --formula mingw-w64 2>/dev/null || echo "  mingw-w64 not installed or already removed"
+    brew uninstall --formula entr 2>/dev/null || echo "  entr not installed or already removed"
+    brew autoremove 2>/dev/null || true
+    ;;
+  Linux)
+    echo "Linux: remove OS packages with your package manager, e.g.:"
+    echo "  sudo apt remove entr libgtk-3-dev libwebkit2gtk-4.0-dev"
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    echo "Windows: remove MSYS2/mingw packages via pacman."
+    ;;
+  *)
+    echo "Unsupported platform: $(uname -s)" >&2
+    ;;
+esac
+"""
+
+["uninstall:android"]
+description = "Remove the Android SDK + cmdline-tools installed for Android builds"
+dir = "{{config_root}}/myapp"
+run = """
+case "$(uname -s)" in
+  Darwin)
+    echo "Removing android-commandlinetools cask..."
+    brew uninstall --cask android-commandlinetools 2>/dev/null || echo "  android-commandlinetools not installed or already removed"
+    ;;
+  Linux)
+    echo "Linux: remove Android cmdline-tools via your package manager (or delete \\$ANDROID_HOME)."
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    echo "Windows: remove Android cmdline-tools via your package manager (or delete \\$ANDROID_HOME)."
+    ;;
+  *)
+    echo "Unsupported platform: $(uname -s)" >&2
+    ;;
+esac
+
+# Remove the SDK directory only if it's the one we manage (default location).
+# Skip if ANDROID_HOME points somewhere custom — leave a dev's own SDK alone.
+sdk="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+if [ -n "$ANDROID_HOME" ] && [ "$sdk" != "$HOME/Library/Android/sdk" ]; then
+  echo "ANDROID_HOME is custom ($sdk) — leaving it in place. Remove manually if desired."
+else
+  echo "Removing SDK directory: $sdk"
+  rm -rf "$sdk"
+fi
+"""
+
 ["dev"]
 description = "Start irgo dev server (hot reload) — requires entr (brew install entr)"
 dir = "{{config_root}}/myapp"

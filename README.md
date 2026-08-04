@@ -45,6 +45,8 @@ mise run dev
 | Task            | Description                                        |
 |-----------------|----------------------------------------------------|
 | `mise run setup`| One-time: install all dev deps (Go tools + OS pkgs)|
+| `mise run uninstall`| Remove everything `setup` installed (inverse) |
+| `mise run uninstall:android`| Remove Android SDK + cmdline-tools |
 | `mise run dev`  | Dev server with hot reload (needs `entr`)          |
 | `mise run serve`| Web server, no file watching (pure mise)           |
 | `mise run css`  | Rebuild Tailwind CSS (`input.css` → `output.css`)  |
