@@ -42,8 +42,19 @@ case "$(uname -s)" in
     done
     ;;
   Linux)
-    echo "Linux: install OS packages with your package manager, e.g.:"
-    echo "  sudo apt install entr libgtk-3-dev libwebkit2gtk-4.0-dev"
+    # Debian/Ubuntu packages: entr (hot reload) + GTK3/WebKit2GTK 4.0
+    # (desktop builds). Idempotent — skips if already installed.
+    if command -v apt-get >/dev/null 2>&1; then
+      if ! command -v entr >/dev/null 2>&1 || ! pkg-config --exists webkit2gtk-4.0 2>/dev/null; then
+        echo "Installing OS packages via apt (entr, GTK3, WebKit2GTK 4.0)..."
+        sudo apt-get update
+        sudo apt-get install -y entr libgtk-3-dev libwebkit2gtk-4.0-dev
+      else
+        echo "Linux OS packages already installed"
+      fi
+    else
+      echo "Linux: not apt-based — install entr, libgtk-3-dev, libwebkit2gtk-4.0-dev manually"
+    fi
     ;;
   MINGW*|MSYS*|CYGWIN*)
     echo "Windows: use MSYS2 with the mingw-w64-x86_64 toolchain."
@@ -82,8 +93,8 @@ case "$(uname -s)" in
     brew autoremove 2>/dev/null || true
     ;;
   Linux)
-    echo "Linux: remove OS packages with your package manager, e.g.:"
-    echo "  sudo apt remove entr libgtk-3-dev libwebkit2gtk-4.0-dev"
+    echo "Removing Linux OS packages (entr, GTK3, WebKit2GTK 4.0)..."
+    sudo apt-get remove -y entr libgtk-3-dev libwebkit2gtk-4.0-dev 2>/dev/null || true
     ;;
   MINGW*|MSYS*|CYGWIN*)
     echo "Windows: remove MSYS2/mingw packages via pacman."

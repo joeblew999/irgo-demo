@@ -23,12 +23,10 @@ jobs:
       - uses: jdx/mise-action@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install GTK/WebKit deps
+      - name: Install OS packages + tools + generate templ + build CSS
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
+          mise run env:setup
+          mise run build:assets
       - name: Build Linux app
         run: mise run build:desktop:linux
       - name: Package
