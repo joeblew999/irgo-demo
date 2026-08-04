@@ -1,5 +1,54 @@
 # tasks/dev.toml — irgo-demo day-to-day commands.
 # All tasks run inside myapp/ where the project lives.
+#
+# Windows devs: these run scripts are POSIX shell — use Git Bash or MSYS2
+# (not PowerShell/cmd), and install the mingw-w64 toolchain. `brew` is only
+# used on macOS for the mingw-w64 cross-compiler.
+
+["setup"]
+description = "One-time: install all dev deps for this platform (Go tools + OS packages)"
+dir = "{{config_root}}/myapp"
+run = """
+# Go-installed tools (idempotent — skips anything already on PATH)
+for entry in \
+  "irgo|github.com/stukennedy/irgo/cmd/irgo@latest" \
+  "templ|github.com/a-h/templ/cmd/templ@latest" \
+  "air|github.com/air-verse/air@latest" \
+  "gomobile|golang.org/x/mobile/cmd/gomobile@latest"; do
+  name="${entry%%|*}"; pkg="${entry#*|}"
+  if ! command -v "$name" >/dev/null 2>&1; then
+    echo "Installing $name (go install)..."
+    go install "$pkg" || echo "  ! failed to install $name"
+  else
+    echo "$name: already installed"
+  fi
+done
+
+# OS-level packages, per platform
+case "$(uname -s)" in
+  Darwin)
+    for pkg in entr mingw-w64; do
+      if ! brew list --versions "$pkg" >/dev/null 2>&1; then
+        echo "Installing $pkg via brew..."
+        brew install "$pkg"
+      fi
+    done
+    ;;
+  Linux)
+    echo "Linux: install OS packages with your package manager, e.g.:"
+    echo "  sudo apt install entr libgtk-3-dev libwebkit2gtk-4.0-dev"
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    echo "Windows: use MSYS2 with the mingw-w64-x86_64 toolchain."
+    ;;
+  *)
+    echo "Unsupported platform: $(uname -s)" >&2
+    ;;
+esac
+
+# Initialize gomobile (no-op on macOS for iOS; needs Android NDK for android)
+command -v gomobile >/dev/null 2>&1 && gomobile init || true
+"""
 
 ["dev"]
 description = "Start irgo dev server (hot reload) — requires entr (brew install entr)"
@@ -37,6 +86,125 @@ dir = "{{config_root}}/myapp"
 run = "go build -o build/myapp ."
 
 ["build:desktop"]
-description = "Build desktop app for current platform"
+description = "Build desktop app for the current platform (auto-detects OS)"
 dir = "{{config_root}}/myapp"
-run = "irgo build desktop"
+run = """
+case "$(uname -s)" in
+  Darwin)
+    echo "Detected macOS — building macOS app"
+    irgo build desktop darwin
+    ;;
+  Linux)
+    echo "Detected Linux — building Linux app"
+    irgo build desktop linux
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    echo "Detected Windows — building Windows app"
+    irgo build desktop windows
+    ;;
+  *)
+    echo "Unsupported platform: $(uname -s)" >&2
+    exit 1
+    ;;
+esac
+"""
+
+["build:desktop:windows"]
+description = "Build Windows desktop app (macOS cross-compiles via mingw-w64; on Windows builds natively)"
+dir = "{{config_root}}/myapp"
+run = """
+# On macOS: brew provides the mingw-w64 cross-compiler.
+# On Windows: native mingw/MSYS2 already ships x86_64-w64-mingw32-gcc — no brew.
+if [ "$(uname -s)" = "Darwin" ] && ! command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then
+  echo "Installing mingw-w64 via brew (Windows cross-compiler)..."
+  brew install mingw-w64
+fi
+GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
+  CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ \
+  irgo build desktop windows
+"""
+
+["build:desktop:linux"]
+description = "Build Linux desktop app (native on Linux only — needs GTK/WebKit, not cross-compilable from macOS)"
+dir = "{{config_root}}/myapp"
+run = """
+case "$(uname -s)" in
+  Linux)
+    echo "Detected Linux — building Linux app natively"
+    irgo build desktop linux
+    ;;
+  *)
+    echo "Linux desktop builds need GTK3 + WebKit2GTK and can't be cross-compiled from $(uname -s)." >&2
+    echo "Build natively on a Linux machine/CI, or use a Docker image with:" >&2
+    echo "  libgtk-3-dev libwebkit2gtk-4.0-dev golang" >&2
+    exit 1
+    ;;
+esac
+"""
+
+["build:desktop:all"]
+description = "Build all desktop apps the current environment supports (macOS → mac + windows)"
+dir = "{{config_root}}/myapp"
+run = """
+case "$(uname -s)" in
+  Darwin)
+    echo "Detected macOS — building macOS + Windows apps"
+    irgo build desktop darwin
+    if ! command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then
+      echo "Installing mingw-w64 via brew (Windows cross-compiler)..."
+      brew install mingw-w64
+    fi
+    GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
+      CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ \
+      irgo build desktop windows
+    ;;
+  Linux)
+    echo "Detected Linux — building Linux app"
+    irgo build desktop linux
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    echo "Detected Windows — building Windows app"
+    irgo build desktop windows
+    ;;
+  *)
+    echo "Unsupported platform: $(uname -s)" >&2
+    exit 1
+    ;;
+esac
+"""
+
+["build:ios"]
+description = "Build iOS framework (gomobile bind → build/ios/Irgo.xcframework) — requires Xcode"
+dir = "{{config_root}}/myapp"
+run = """
+if ! command -v gomobile >/dev/null 2>&1; then
+  echo "gomobile not found — run 'mise run setup' first"
+  exit 1
+fi
+irgo build ios
+"""
+
+["build:ios:app"]
+description = "Build iOS app for simulator (framework + xcodebuild)"
+dir = "{{config_root}}/myapp"
+run = """
+if ! command -v gomobile >/dev/null 2>&1; then
+  echo "gomobile not found — run 'mise run setup' first"
+  exit 1
+fi
+irgo build ios
+xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath build/ios/DerivedData build
+"""
+
+["run:ios"]
+description = "Build and launch iOS app on the Simulator (dev mode uses hot reload)"
+dir = "{{config_root}}/myapp"
+run = """
+if ! command -v gomobile >/dev/null 2>&1; then
+  echo "gomobile not found — run 'mise run setup' first"
+  exit 1
+fi
+irgo run ios
+"""

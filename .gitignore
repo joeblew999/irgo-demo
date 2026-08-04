@@ -12,5 +12,9 @@ Thumbs.db
 # mise
 .mise.tmp/
 
+# Go workspace (machine-specific, recreated by `irgo build ios` on demand)
+go.work
+go.work.sum
+
 # Logs
 *.log
