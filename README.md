@@ -56,7 +56,7 @@ mise run dev
 | `mise run build:desktop:linux`   | Build Linux app (native Linux only)     |
 | `mise run build:desktop:all`     | Build every app the current OS supports |
 | `mise run build:ios`     | Build iOS framework (`Irgo.xcframework`, needs Xcode) |
-| `mise run build:ios:app` | Build iOS app for the simulator          |
+| `mise run build:ios:sim` | Build iOS app for the simulator (Debug)  |
 | `mise run run:ios`       | Build + launch iOS app on the Simulator  |
 
 ## Platform targets

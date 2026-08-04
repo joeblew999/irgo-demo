@@ -207,8 +207,8 @@ fi
 irgo build ios
 """
 
-["build:ios:app"]
-description = "Build iOS app for simulator (framework + xcodebuild)"
+["build:ios:sim"]
+description = "Build iOS app for simulator, Debug config (framework + xcodebuild)"
 dir = "{{config_root}}/myapp"
 run = """
 if ! command -v gomobile >/dev/null 2>&1; then
