@@ -1,9 +1,10 @@
 # tasks/dev.toml — irgo-demo day-to-day commands.
 # All tasks run inside myapp/ where the project lives.
 #
+# Cross-platform: run `mise run env:setup` once per machine — it installs
+# per-platform deps: brew (macOS), apt (Linux), MSYS2 pacman (Windows).
 # Windows devs: these run scripts are POSIX shell — use Git Bash or MSYS2
-# (not PowerShell/cmd), and install the mingw-w64 toolchain. `brew` is only
-# used on macOS for the mingw-w64 cross-compiler.
+# (not PowerShell/cmd).
 
 ["env:tools"]
 description = "Install pinned Go tools (irgo/templ/air/gomobile) — versions match go.mod, idempotent"
@@ -57,7 +58,14 @@ case "$(uname -s)" in
     fi
     ;;
   MINGW*|MSYS*|CYGWIN*)
-    echo "Windows: use MSYS2 with the mingw-w64-x86_64 toolchain."
+    # MSYS2: install the mingw-w64 toolchain (C/C++ compiler for CGO desktop
+    # builds). Idempotent (pacman --needed). Falls back to guidance otherwise.
+    if command -v pacman >/dev/null 2>&1; then
+      echo "Installing mingw-w64 toolchain via pacman..."
+      pacman -S --noconfirm --needed mingw-w64-x86_64-gcc
+    else
+      echo "Windows: install MSYS2 (https://www.msys2.org) with the mingw-w64-x86_64 toolchain."
+    fi
     ;;
   *)
     echo "Unsupported platform: $(uname -s)" >&2
@@ -97,7 +105,12 @@ case "$(uname -s)" in
     sudo apt-get remove -y entr libgtk-3-dev libwebkit2gtk-4.0-dev 2>/dev/null || true
     ;;
   MINGW*|MSYS*|CYGWIN*)
-    echo "Windows: remove MSYS2/mingw packages via pacman."
+    if command -v pacman >/dev/null 2>&1; then
+      echo "Removing mingw-w64 toolchain via pacman..."
+      pacman -R --noconfirm mingw-w64-x86_64-gcc 2>/dev/null || true
+    else
+      echo "Windows: remove MSYS2/mingw packages via pacman."
+    fi
     ;;
   *)
     echo "Unsupported platform: $(uname -s)" >&2
