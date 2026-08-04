@@ -87,6 +87,10 @@ Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (build
   installs them.
 - Linux desktop builds need GTK3 + WebKit2GTK and can't be cross-compiled from
   macOS — build on a Linux machine/CI or use a Docker image.
+- CI (`.github/workflows/build.yml`) builds Linux/macOS/Windows desktop + iOS
+  simulator on every push; the iOS device build runs only when signing secrets
+  (`IOS_TEAM_ID`) are configured. Note that `_templ.go` and `output.css` are
+  gitignored but embedded into builds, so CI regenerates them first.
 - Keep the templ **generator** and templ **library** versions in sync
   (`go.mod`); otherwise generated code may reference APIs the library lacks.
 - App Store / Play Store distribution (signing, metadata, review) is outside
