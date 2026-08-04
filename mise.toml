@@ -1,0 +1,10 @@
+# mise.toml — irgo-demo
+# Go toolchain for this repo (irgo requires Go 1.21+)
+# node for Tailwind CLI + frontend tooling
+
+[task_config]
+includes = ["tasks/dev.toml"]
+
+[tools]
+go = "1.26.5"
+node = "lts"

@@ -1,0 +1,42 @@
+# tasks/dev.toml — irgo-demo day-to-day commands.
+# All tasks run inside myapp/ where the project lives.
+
+["dev"]
+description = "Start irgo dev server (hot reload) — requires entr (brew install entr)"
+dir = "{{config_root}}/myapp"
+run = "irgo dev"
+
+["serve"]
+description = "Run web server without file watching (no entr needed — pure mise)"
+dir = "{{config_root}}/myapp"
+run = "irgo serve"
+
+["css"]
+description = "Rebuild Tailwind CSS (input.css → output.css)"
+dir = "{{config_root}}/myapp"
+run = "bun run css"
+
+["css:watch"]
+description = "Watch Tailwind CSS sources"
+dir = "{{config_root}}/myapp"
+run = "bun run css:watch"
+
+["templ"]
+description = "Generate _templ.go from *.templ templates"
+dir = "{{config_root}}/myapp"
+run = "irgo templ"
+
+["test"]
+description = "Run Go tests"
+dir = "{{config_root}}/myapp"
+run = "go test ./..."
+
+["build:web"]
+description = "Build web server binary"
+dir = "{{config_root}}/myapp"
+run = "go build -o build/myapp ."
+
+["build:desktop"]
+description = "Build desktop app for current platform"
+dir = "{{config_root}}/myapp"
+run = "irgo build desktop"
