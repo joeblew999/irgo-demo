@@ -118,6 +118,68 @@ case "$(uname -s)" in
 esac
 """
 
+["env:setup:android"]
+description = "Install Android SDK + NDK for Android builds (brew cask + sdkmanager) — idempotent"
+dir = "{{config_root}}/myapp"
+run = """
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+
+# JDK required by sdkmanager (present on CI runners; install on dev machines)
+if ! command -v java >/dev/null 2>&1 && [ "$(uname -s)" = "Darwin" ]; then
+  echo "Installing temurin JDK via brew (required by sdkmanager)..."
+  brew install --cask temurin
+fi
+
+# Locate sdkmanager (brew cask path or PATH)
+SDKM="$(command -v sdkmanager 2>/dev/null || true)"
+for p in /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager \
+         /usr/local/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager; do
+  [ -z "$SDKM" ] && [ -x "$p" ] && SDKM="$p"
+done
+
+case "$(uname -s)" in
+  Darwin)
+    if [ -z "$SDKM" ] && ! brew list --cask android-commandlinetools >/dev/null 2>&1; then
+      echo "Installing android-commandlinetools via brew..."
+      brew install --cask android-commandlinetools
+    fi
+    ;;
+  Linux|MINGW*|MSYS*|CYGWIN*)
+    echo "Note: install Android cmdline-tools via your package manager or set ANDROID_HOME." >&2
+    ;;
+esac
+
+# Re-locate after possible brew install
+[ -z "$SDKM" ] && SDKM="$(command -v sdkmanager 2>/dev/null || true)"
+[ -z "$SDKM" ] && [ -x /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager ] && SDKM=/opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager
+
+if [ -z "$SDKM" ]; then
+  echo "sdkmanager not found — install android-commandlinetools (macOS) or set ANDROID_HOME." >&2
+  exit 1
+fi
+
+# Install SDK components (sdkmanager is idempotent — skips what's installed)
+mkdir -p "$ANDROID_HOME"
+echo "Accepting Android SDK licenses..."
+yes | "$SDKM" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
+echo "Installing Android SDK components (platform-tools, platform, build-tools, NDK)..."
+"$SDKM" --sdk_root="$ANDROID_HOME" \
+  "platform-tools" \
+  "platforms;android-35" \
+  "build-tools;35.0.0" \
+  "ndk;27.0.12077973"
+
+# Initialize gomobile with the NDK (so Android bind works)
+ndk_dir="$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | head -1)"
+if [ -n "$ndk_dir" ]; then
+  export ANDROID_NDK_HOME="$ndk_dir"
+  echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+  command -v gomobile >/dev/null 2>&1 && gomobile init 2>&1 | tail -3 || true
+else
+  echo "NDK not found in $ANDROID_HOME/ndk — Android build may fail." >&2
+fi
+"""
+
 ["env:uninstall:android"]
 description = "Remove the Android SDK + cmdline-tools installed for Android builds"
 dir = "{{config_root}}/myapp"
@@ -459,4 +521,45 @@ irgo build ios
 xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
   -configuration Release -destination 'generic/platform=iOS' \
   -derivedDataPath build/ios/DerivedData-Release build
+"""
+
+["build:android"]
+description = "Build Android framework (gomobile bind → build/android/irgo.aar) — requires Android SDK + NDK"
+dir = "{{config_root}}/myapp"
+run = """
+if ! command -v gomobile >/dev/null 2>&1; then
+  echo "gomobile not found — run 'mise run env:setup' first"
+  exit 1
+fi
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+if [ -z "$ANDROID_NDK_HOME" ]; then
+  export ANDROID_NDK_HOME="$(ls -d "$ANDROID_HOME"/ndk/* 2>/dev/null | head -1)"
+fi
+if [ -z "$ANDROID_NDK_HOME" ] || [ ! -d "$ANDROID_NDK_HOME" ]; then
+  echo "Android NDK not found — run 'mise run env:setup:android' first" >&2
+  exit 1
+fi
+# Self-heal stale go.work (see build:ios)
+if [ -f go.work ]; then
+  stale=0
+  in_use=0
+  while IFS= read -r line; do
+    case "$line" in
+      "use (") in_use=1 ;;
+      ")") in_use=0 ;;
+      "."|"") ;;
+      *)
+        if [ "$in_use" = "1" ]; then
+          p=$(printf '%s' "$line" | tr -d '[:space:]')
+          [ -d "$p" ] || { echo "go.work references missing dir: $p"; stale=1; }
+        fi
+        ;;
+    esac
+  done < go.work
+  if [ "$stale" = "1" ]; then
+    echo "Removing stale go.work (irgo regenerates it on next build)..."
+    rm -f go.work go.work.sum
+  fi
+fi
+irgo build android
 """

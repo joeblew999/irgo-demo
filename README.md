@@ -51,6 +51,7 @@ Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (build
 | `mise run env:setup`| One-time: install all dev deps (Go tools + OS pkgs)|
 | `mise run env:tools`| Install pinned Go tools (irgo/templ/air/gomobile) |
 | `mise run env:uninstall`| Remove everything `env:setup` installed (inverse) |
+| `mise run env:setup:android`| Install Android SDK + NDK (brew + sdkmanager) |
 | `mise run env:uninstall:android`| Remove Android SDK + cmdline-tools |
 | `mise run serve`| Web server, no file watching (pure mise)           |
 | `mise run serve:dev`| Dev server with hot reload (needs `entr`)        |
@@ -66,6 +67,7 @@ Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (build
 | `mise run build:ios`     | Build iOS framework (`Irgo.xcframework`, needs Xcode) |
 | `mise run build:ios:sim` | Build iOS app for the simulator (Debug)  |
 | `mise run build:ios:prod`| Build iOS app for device/App Store (Release) |
+| `mise run build:android` | Build Android framework (`irgo.aar`, needs SDK + NDK) |
 | `mise run run:ios`       | Build + launch iOS app on the Simulator  |
 | `mise run run:ios:dev`   | Launch iOS app with hot reload            |
 | `mise run check:test`    | Run Go tests                             |

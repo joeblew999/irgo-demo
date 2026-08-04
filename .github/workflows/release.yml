@@ -15,6 +15,27 @@ permissions:
   contents: write
 
 jobs:
+  web:
+    name: Web binary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install tools + generate templ + build CSS
+        run: mise run build:assets
+      - name: Build web binary
+        run: mise run build:web
+      - name: Package
+        run: |
+          cd myapp/build
+          tar -czf myapp-web-${{ github.ref_name }}.tar.gz myapp
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: myapp/build/myapp-web-*.tar.gz
+
   linux-desktop:
     name: Linux desktop
     runs-on: ubuntu-22.04   # webkit2gtk-4.0 unavailable on 24.04
@@ -86,3 +107,26 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: myapp/build/ios/*.zip
+
+  android:
+    name: Android framework
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install tools + generate templ + build CSS
+        run: mise run build:assets
+      - name: Install Android SDK + NDK
+        run: mise run env:setup:android
+      - name: Build Android AAR
+        run: mise run build:android
+      - name: Package
+        run: |
+          cd myapp/build/android
+          zip -r irgo-android-${{ github.ref_name }}.zip irgo.aar
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: myapp/build/android/irgo-android-*.zip

@@ -36,6 +36,13 @@ jobs:
         run: mise run build:assets
       - name: Run Go tests
         run: mise run check:test
+      - name: Build web binary
+        run: mise run build:web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: myapp/build/myapp
+          if-no-files-found: error
 
   linux-desktop:
     name: Linux desktop
@@ -95,6 +102,26 @@ jobs:
           path: |
             myapp/build/ios/Irgo.xcframework/
             myapp/build/ios/DerivedData/Build/Products/Debug-iphonesimulator/Example.app/
+          if-no-files-found: error
+
+  android:
+    name: Android framework
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install tools + generate templ + build CSS
+        run: mise run build:assets
+      - name: Install Android SDK + NDK
+        run: mise run env:setup:android
+      - name: Build Android AAR
+        run: mise run build:android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-framework
+          path: myapp/build/android/
           if-no-files-found: error
 
   check-ios-signing:
