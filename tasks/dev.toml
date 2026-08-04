@@ -181,11 +181,13 @@ fi
 """
 
 ["env:uninstall:android"]
-description = "Remove the Android SDK + cmdline-tools installed for Android builds"
+description = "Remove everything env:setup:android installs (JDK, cmdline-tools, SDK)"
 dir = "{{config_root}}/myapp"
 run = """
 case "$(uname -s)" in
   Darwin)
+    echo "Removing temurin JDK (installed by env:setup:android)..."
+    brew uninstall --cask temurin 2>/dev/null || echo "  temurin not installed or already removed"
     echo "Removing android-commandlinetools cask..."
     brew uninstall --cask android-commandlinetools 2>/dev/null || echo "  android-commandlinetools not installed or already removed"
     ;;
