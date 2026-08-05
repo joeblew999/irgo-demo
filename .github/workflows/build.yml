@@ -84,6 +84,50 @@ jobs:
             myapp/build/desktop/windows/
           if-no-files-found: error
 
+  # Windows is cross-compiled above, but a cross-compiled exe has never been
+  # RUN. This job builds natively on a real Windows runner and smoke-tests the
+  # app: launch, wait, assert the process is still alive (catches WebView2 init
+  # failures, missing DLLs, CGO linking, and static-dir resolution), then kill.
+  windows-desktop:
+    name: Windows desktop (native build + smoke run)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install tools + generate templ + build CSS
+        run: mise run build:assets
+      - name: Build Windows app (native)
+        run: mise run build:desktop:windows
+      - name: Smoke test (launch + assert alive)
+        shell: pwsh
+        run: |
+          $dir = "myapp\build\desktop\windows"
+          $exe = Join-Path $dir "myapp.exe"
+          if (-not (Test-Path $exe)) { Write-Error "exe not found: $exe"; exit 1 }
+          $out = Join-Path $dir "smoke.out.log"
+          $err = Join-Path $dir "smoke.err.log"
+          Write-Host "Launching $exe ..."
+          $p = Start-Process -FilePath $exe -WorkingDirectory $dir `
+            -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
+          Start-Sleep -Seconds 15
+          if ($p.HasExited) {
+            Write-Host "::error::myapp.exe exited early (code $($p.ExitCode))"
+            if (Test-Path $out) { Write-Host "--- stdout ---"; Get-Content $out }
+            if (Test-Path $err) { Write-Host "--- stderr ---"; Get-Content $err }
+            exit 1
+          }
+          Write-Host "Smoke test PASSED — myapp.exe still running (pid $($p.Id))"
+          Stop-Process -Id $p.Id -Force
+          if (Test-Path $out) { Write-Host "--- stdout ---"; Get-Content $out }
+          if (Test-Path $err) { Write-Host "--- stderr ---"; Get-Content $err }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-native
+          path: myapp/build/desktop/windows/
+          if-no-files-found: error
+
   ios:
     name: iOS framework + simulator
     runs-on: macos-latest
