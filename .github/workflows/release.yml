@@ -2,14 +2,16 @@
 # Triggered by pushing a version tag:  git tag v0.1.0 && git push origin v0.1.0
 #
 # Reuses the same mise tasks as local dev + build.yml (single source of truth):
-#   mise run build:assets  -> pinned Go tools + templ + CSS (all gitignored)
-#   mise run build:desktop:linux|all, build:ios:sim
+#   mise run build:assets -> pinned Go tools + templ + CSS (all gitignored)
+#   build:desktop (macOS), build:desktop:linux, build:desktop:windows (native,
+#   smoke-tested before packaging), build:ios:sim, env:setup:android+build:android
 
 name: release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:   # manual trigger for testing the release pipeline
 
 permissions:
   contents: write
@@ -60,7 +62,7 @@ jobs:
           files: myapp/build/desktop/linux/myapp-linux-*.tar.gz
 
   macos-desktop:
-    name: macOS + Windows desktop
+    name: macOS desktop
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -69,22 +71,58 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install tools + generate templ + build CSS
         run: mise run build:assets
-      - name: Build macOS + Windows apps (task auto-installs mingw-w64)
-        run: mise run build:desktop:all
+      - name: Build macOS app
+        run: mise run build:desktop
       - name: Package macOS app bundle
         run: |
           cd myapp/build/desktop/macos
           ditto -c -k --keepParent myapp.app myapp-macos-${{ github.ref_name }}.zip
-      - name: Package Windows exe
-        run: |
-          cd myapp/build/desktop/windows
-          zip -r myapp-windows-${{ github.ref_name }}.zip myapp.exe static
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            myapp/build/desktop/macos/*.zip
-            myapp/build/desktop/windows/*.zip
+          files: myapp/build/desktop/macos/*.zip
+
+  windows-desktop:
+    name: Windows desktop (native build + smoke test)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install tools + generate templ + build CSS
+        run: mise run build:assets
+      - name: Build Windows app (native)
+        run: mise run build:desktop:windows
+      - name: Smoke test (launch + assert alive)
+        shell: pwsh
+        run: |
+          $dir = "myapp\build\desktop\windows"
+          $exe = Join-Path $dir "myapp.exe"
+          if (-not (Test-Path $exe)) { Write-Error "exe not found: $exe"; exit 1 }
+          $out = Join-Path $dir "smoke.out.log"
+          $err = Join-Path $dir "smoke.err.log"
+          $p = Start-Process -FilePath $exe -WorkingDirectory $dir `
+            -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
+          Start-Sleep -Seconds 15
+          if ($p.HasExited) {
+            Write-Host "::error::myapp.exe exited early (code $($p.ExitCode))"
+            if (Test-Path $out) { Write-Host "--- stdout ---"; Get-Content $out }
+            if (Test-Path $err) { Write-Host "--- stderr ---"; Get-Content $err }
+            exit 1
+          }
+          Write-Host "Smoke test PASSED — myapp.exe still running (pid $($p.Id))"
+          Stop-Process -Id $p.Id -Force
+      - name: Package Windows exe
+        shell: pwsh
+        run: |
+          $dir = "myapp\build\desktop\windows"
+          $zip = Join-Path $dir "myapp-windows-${{ github.ref_name }}.zip"
+          Compress-Archive -Path (Join-Path $dir "myapp.exe"), (Join-Path $dir "static") -DestinationPath $zip -Force
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: myapp/build/desktop/windows/myapp-windows-*.zip
 
   ios:
     name: iOS framework + simulator app

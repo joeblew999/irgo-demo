@@ -1,4 +1,6 @@
-# Builds all targets: Go tests, Linux/macOS/Windows desktop, iOS.
+# Builds all targets: Go tests, Linux/macOS/Windows desktop, iOS, Android.
+# Windows is built natively on a real runner and smoke-tested — a
+# cross-compiled exe that is never run is worse than useless.
 #
 # Tooling and gitignored-but-embedded artifacts are handled by mise tasks
 # (single source of truth, shared with local dev):
@@ -65,7 +67,7 @@ jobs:
           if-no-files-found: error
 
   macos-desktop:
-    name: macOS + Windows desktop
+    name: macOS desktop
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -74,20 +76,18 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install tools + generate templ + build CSS
         run: mise run build:assets
-      - name: Build macOS + Windows apps (task auto-installs mingw-w64 via brew)
-        run: mise run build:desktop:all
+      - name: Build macOS app
+        run: mise run build:desktop
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-macos-windows
-          path: |
-            myapp/build/desktop/macos/
-            myapp/build/desktop/windows/
+          name: desktop-macos
+          path: myapp/build/desktop/macos/
           if-no-files-found: error
 
-  # Windows is cross-compiled above, but a cross-compiled exe has never been
-  # RUN. This job builds natively on a real Windows runner and smoke-tests the
-  # app: launch, wait, assert the process is still alive (catches WebView2 init
-  # failures, missing DLLs, CGO linking, and static-dir resolution), then kill.
+  # Native Windows build + smoke test: launch, wait, assert the process is
+  # still alive (catches WebView2 init failures, missing DLLs, CGO linking,
+  # and static-dir resolution), then kill. This is the exe that ships — the
+  # old cross-compile path is gone, so every shipped exe has been run.
   windows-desktop:
     name: Windows desktop (native build + smoke run)
     runs-on: windows-latest
