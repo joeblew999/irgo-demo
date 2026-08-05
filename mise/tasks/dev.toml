@@ -305,6 +305,12 @@ description = "Generate templ + build Tailwind CSS (both gitignored but embedded
 depends = ["env:tools"]
 dir = "{{config_root}}/myapp"
 run = """
+# git-bash drops the Windows Path var, so native children spawned by native
+# tools (irgo -> templ/go) can't resolve executables. Re-export it in Windows
+# format from the POSIX PATH. No-op on macOS/Linux.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) export Path="$(cygpath -w -p "$PATH")" ;;
+esac
 bun install
 irgo templ
 bun run css
@@ -348,6 +354,12 @@ esac
 description = "Build Windows desktop app (native on Windows; macOS cross-compiles via mingw-w64)"
 dir = "{{config_root}}/myapp"
 run = """
+# git-bash drops the Windows Path var — native children (irgo -> go/templ)
+# can't resolve executables without it. Re-export in Windows format; no-op
+# on macOS/Linux.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) export Path="$(cygpath -w -p "$PATH")" ;;
+esac
 case "$(uname -s)" in
   Darwin)
     # macOS: brew provides the mingw-w64 cross-compiler.
