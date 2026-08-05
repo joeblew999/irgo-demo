@@ -14,8 +14,22 @@ dir = "{{config_root}}/myapp"
 run = """
 # Pinned to go.mod to avoid @latest drift: the irgo CLI must match the go.mod
 # irgo version, and the templ generator must match the templ library version.
+#
+# irgo comes from the joeblew999/irgo fork (see go.mod `replace`). The fork
+# keeps the upstream module path, so `go install github.com/joeblew999/irgo/...`
+# would fail — build the CLI from a local checkout instead (set IRGO_FORK_DIR
+# to point at one), falling back to the released CLI otherwise.
+IRGO_FORK_DIR="${IRGO_FORK_DIR:-$HOME/workspace/go/src/github.com/joeblew999/irgo}"
+if ! command -v irgo >/dev/null 2>&1; then
+  if [ -d "$IRGO_FORK_DIR" ]; then
+    echo "Installing irgo from fork ($IRGO_FORK_DIR)..."
+    (cd "$IRGO_FORK_DIR" && go install ./cmd/irgo) || go install github.com/stukennedy/irgo/cmd/irgo@v0.3.1
+  else
+    echo "irgo fork not found at $IRGO_FORK_DIR — installing released CLI (v0.3.1). Set IRGO_FORK_DIR to use the fork." >&2
+    go install github.com/stukennedy/irgo/cmd/irgo@v0.3.1
+  fi
+fi
 for entry in \
-  "irgo|github.com/stukennedy/irgo/cmd/irgo@v0.3.1" \
   "templ|github.com/a-h/templ/cmd/templ@v0.3.977" \
   "air|github.com/air-verse/air@latest" \
   "gomobile|golang.org/x/mobile/cmd/gomobile@latest"; do
