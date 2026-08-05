@@ -11,12 +11,15 @@
 # Everything else is a plain `irgo` call — run it directly from myapp/ rather
 # than through a wrapper here:
 #   irgo serve | dev | templ | test
-#   irgo build ios [--sim] | android | all | desktop
+#   irgo build ios [--sim] | android | all
+#   irgo build desktop [darwin|windows|linux|all]  (installs mingw-w64 as needed)
 #   irgo run ios [--dev] | android [--no-window] | desktop [--dev]
 #   irgo install-tools android [--emulator] | doctor android
 #   irgo uninstall-tools android --remove-jdk
 # `irgo help` is the reference. Only tasks holding logic the CLI does not own
-# (OS packages, bun/CSS, desktop cross-compilation) still live below.
+# (OS packages, bun/CSS, iOS release signing) still live below.
+
+
 
 ["env:tools"]
 description = "Install the irgo CLI (fork) + irgo install-tools (templ pinned to go.mod, air, gomobile) — idempotent"
@@ -187,100 +190,6 @@ case "$(uname -s)" in
     ;;
 esac
 bun run css
-"""
-
-["build:desktop:windows"]
-description = "Build Windows desktop app (native on Windows; macOS cross-compiles via mingw-w64)"
-dir = "{{config_root}}/myapp"
-run = """
-# Fail loudly: mise does not always inject set -e, and a silent go build
-# failure previously let the task pass without producing an exe.
-set -e
-case "$(uname -s)" in
-  Darwin)
-    # macOS: brew provides the mingw-w64 cross-compiler.
-    if ! command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then
-      echo "Installing mingw-w64 via brew (Windows cross-compiler)..."
-      brew install mingw-w64
-    fi
-    GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \\
-      CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ \\
-      irgo build desktop windows
-    ;;
-  MINGW*|MSYS*|CYGWIN*)
-    # Windows native. git-bash strips the Windows Path var, so native tools
-    # spawned by native tools (irgo -> go/templ/g++) fail exec.LookPath. Bash
-    # itself CAN run native tools, so build directly with absolute paths and
-    # point CC/CXX at the absolute gcc/g++ to avoid any LookPath.
-    echo "Detected Windows — building natively (direct toolchain)"
-    GO="$(command -v go)"
-    TEMPL="$(command -v templ)"
-    GCC="$(command -v gcc)"
-    GXX="$(command -v g++)"
-    "$TEMPL" generate
-    mkdir -p build/desktop/windows
-    CGO_ENABLED=1 CC="$GCC" CXX="$GXX" "$GO" build -tags desktop -ldflags "-H windowsgui" \\
-      -o build/desktop/windows/myapp.exe .
-    if [ -d static ]; then
-      rm -rf build/desktop/windows/static
-      cp -r static build/desktop/windows/static
-    fi
-    echo "Windows app built: build/desktop/windows/myapp.exe"
-    ;;
-  *)
-    echo "Windows desktop build unsupported from $(uname -s)" >&2
-    exit 1
-    ;;
-esac
-"""
-
-["build:desktop:linux"]
-description = "Build Linux desktop app (native on Linux only — needs GTK/WebKit, not cross-compilable from macOS)"
-dir = "{{config_root}}/myapp"
-run = """
-case "$(uname -s)" in
-  Linux)
-    echo "Detected Linux — building Linux app natively"
-    irgo build desktop linux
-    ;;
-  *)
-    echo "Linux desktop builds need GTK3 + WebKit2GTK and can't be cross-compiled from $(uname -s)." >&2
-    echo "Build natively on a Linux machine/CI, or use a Docker image with:" >&2
-    echo "  libgtk-3-dev libwebkit2gtk-4.0-dev golang" >&2
-    exit 1
-    ;;
-esac
-"""
-
-["build:desktop:all"]
-description = "Build all desktop apps the current environment supports (macOS → mac + windows)"
-dir = "{{config_root}}/myapp"
-run = """
-case "$(uname -s)" in
-  Darwin)
-    echo "Detected macOS — building macOS + Windows apps"
-    irgo build desktop darwin
-    if ! command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then
-      echo "Installing mingw-w64 via brew (Windows cross-compiler)..."
-      brew install mingw-w64
-    fi
-    GOOS=windows GOARCH=amd64 CGO_ENABLED=1 \
-      CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ \
-      irgo build desktop windows
-    ;;
-  Linux)
-    echo "Detected Linux — building Linux app"
-    irgo build desktop linux
-    ;;
-  MINGW*|MSYS*|CYGWIN*)
-    echo "Detected Windows — building Windows app"
-    irgo build desktop windows
-    ;;
-  *)
-    echo "Unsupported platform: $(uname -s)" >&2
-    exit 1
-    ;;
-esac
 """
 
 ["build:ios:prod"]

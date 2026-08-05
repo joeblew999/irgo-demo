@@ -48,7 +48,8 @@ jobs:
       - name: Install OS packages
         run: mise run env:setup
       - name: Build Linux app
-        run: mise run build:desktop:linux
+        working-directory: myapp
+        run: irgo build desktop linux
       - name: Package
         run: |
           cd myapp/build/desktop/linux
@@ -87,7 +88,8 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build Windows app (native)
-        run: mise run build:desktop:windows
+        working-directory: myapp
+        run: irgo build desktop windows
       - name: Smoke test (launch + assert alive)
         shell: pwsh
         run: |

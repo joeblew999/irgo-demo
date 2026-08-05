@@ -57,7 +57,7 @@ jobs:
           - name: Linux
             os: ubuntu-22.04
             needs_os_pkgs: true
-            cmd: mise run build:desktop:linux
+            cmd: irgo build desktop linux
             artifact: desktop-linux
             path: myapp/build/desktop/linux/
             smoke: false
@@ -71,7 +71,7 @@ jobs:
           - name: Windows
             os: windows-latest
             needs_os_pkgs: false
-            cmd: mise run build:desktop:windows
+            cmd: irgo build desktop windows
             artifact: desktop-windows-native
             path: myapp/build/desktop/windows/
             smoke: true
