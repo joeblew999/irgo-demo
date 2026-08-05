@@ -305,14 +305,19 @@ description = "Generate templ + build Tailwind CSS (both gitignored but embedded
 depends = ["env:tools"]
 dir = "{{config_root}}/myapp"
 run = """
-# git-bash drops the Windows Path var, so native children spawned by native
-# tools (irgo -> templ/go) can't resolve executables. Re-export it in Windows
-# format from the POSIX PATH. No-op on macOS/Linux.
-case "$(uname -s)" in
-  MINGW*|MSYS*|CYGWIN*) export Path="$(cygpath -w -p "$PATH")" ;;
-esac
 bun install
-irgo templ
+# git-bash on Windows strips the Windows Path var, so native tools spawned by
+# native tools (irgo -> templ) fail. Bash CAN run native tools directly, so use
+# `templ generate` via its absolute path there. irgo templ elsewhere.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    TEMPL="$(command -v templ)"
+    "$TEMPL" generate
+    ;;
+  *)
+    irgo templ
+    ;;
+esac
 bun run css
 """
 
@@ -365,12 +370,6 @@ esac
 description = "Build Windows desktop app (native on Windows; macOS cross-compiles via mingw-w64)"
 dir = "{{config_root}}/myapp"
 run = """
-# git-bash drops the Windows Path var — native children (irgo -> go/templ)
-# can't resolve executables without it. Re-export in Windows format; no-op
-# on macOS/Linux.
-case "$(uname -s)" in
-  MINGW*|MSYS*|CYGWIN*) export Path="$(cygpath -w -p "$PATH")" ;;
-esac
 case "$(uname -s)" in
   Darwin)
     # macOS: brew provides the mingw-w64 cross-compiler.
@@ -383,10 +382,23 @@ case "$(uname -s)" in
       irgo build desktop windows
     ;;
   MINGW*|MSYS*|CYGWIN*)
-    # Windows: build natively — mingw gcc is already on PATH (no CC override;
-    # the x86_64-w64-mingw32- triple isn't guaranteed on the runner).
-    echo "Detected Windows — building natively"
-    GOOS=windows GOARCH=amd64 CGO_ENABLED=1 irgo build desktop windows
+    # Windows native. git-bash strips the Windows Path var, so native tools
+    # spawned by native tools (irgo -> go/templ/gcc) fail exec.LookPath. Bash
+    # itself CAN run native tools, so build directly with absolute paths and
+    # point CC at the absolute gcc to avoid any LookPath.
+    echo "Detected Windows — building natively (direct toolchain)"
+    GO="$(command -v go)"
+    TEMPL="$(command -v templ)"
+    GCC="$(command -v gcc)"
+    "$TEMPL" generate
+    mkdir -p build/desktop/windows
+    CGO_ENABLED=1 CC="$GCC" "$GO" build -tags desktop -ldflags "-H windowsgui" \\
+      -o build/desktop/windows/myapp.exe .
+    if [ -d static ]; then
+      rm -rf build/desktop/windows/static
+      cp -r static build/desktop/windows/static
+    fi
+    echo "Windows app built: build/desktop/windows/myapp.exe"
     ;;
   *)
     echo "Windows desktop build unsupported from $(uname -s)" >&2
