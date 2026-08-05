@@ -9,7 +9,7 @@
 # (not PowerShell/cmd).
 
 ["env:tools"]
-description = "Install pinned Go tools (irgo/templ/air/gomobile) — versions match go.mod, idempotent"
+description = "Install the irgo CLI (fork) + irgo install-tools (templ pinned to go.mod, air, gomobile) — idempotent"
 dir = "{{config_root}}/myapp"
 run = """
 # Pinned to go.mod to avoid @latest drift: the irgo CLI must match the go.mod
@@ -21,7 +21,7 @@ run = """
 # (IRGO_FORK_DIR), else clone the pinned fork tag so CI and fresh dev machines
 # get the same fixed CLI (the released v0.3.1 is broken for mobile).
 IRGO_FORK_DIR="${IRGO_FORK_DIR:-$HOME/workspace/go/src/github.com/joeblew999/irgo}"
-IRGO_FORK_TAG="${IRGO_FORK_TAG:-v0.4.0-androidapi21.8}"
+IRGO_FORK_TAG="${IRGO_FORK_TAG:-v0.4.0-androidapi21.10}"
 if ! command -v irgo >/dev/null 2>&1; then
   if [ -d "$IRGO_FORK_DIR" ]; then
     echo "Installing irgo from fork checkout ($IRGO_FORK_DIR)..."
@@ -41,18 +41,14 @@ if ! command -v irgo >/dev/null 2>&1; then
     go install github.com/stukennedy/irgo/cmd/irgo@v0.3.1
   fi
 fi
-for entry in \
-  "templ|github.com/a-h/templ/cmd/templ@v0.3.977" \
-  "air|github.com/air-verse/air@latest" \
-  "gomobile|golang.org/x/mobile/cmd/gomobile@latest"; do
-  name="${entry%%|*}"; pkg="${entry#*|}"
-  if ! command -v "$name" >/dev/null 2>&1; then
-    echo "Installing $name (go install)..."
-    go install "$pkg" || echo "  ! failed to install $name"
-  else
-    echo "$name: already installed"
-  fi
-done
+# Delegate tool installs to the CLI itself: `irgo install-tools` pins the
+# templ generator to the project's go.mod version (no @latest drift) and
+# installs air + gomobile.
+IRGO_BIN="$(command -v irgo 2>/dev/null || true)"
+if [ -z "$IRGO_BIN" ]; then
+  IRGO_BIN="$(go env GOPATH 2>/dev/null || echo "$HOME/go")/bin/irgo"
+fi
+"$IRGO_BIN" install-tools
 """
 
 ["env:setup"]
