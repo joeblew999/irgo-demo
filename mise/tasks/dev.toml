@@ -135,30 +135,43 @@ esac
 """
 
 ["env:setup:android"]
-description = "Install Android SDK + NDK for Android builds (brew cask + sdkmanager) — idempotent"
+description = "Install Android SDK + NDK for Android builds (JDK + cmdline-tools + sdkmanager) — idempotent"
 dir = "{{config_root}}/myapp"
 run = """
+set -e
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 
-# JDK required by sdkmanager + gradle. JDK 17 is pinned: the example's
-# Gradle 8.2 / AGP 8.2 toolchain doesn't run on JDK 21+.
-# Use the openjdk@17 FORMULA (not the temurin cask): the cask ships a .pkg
-# installer that requires an admin password; the formula installs without.
-# Note: macOS also ships a /usr/bin/java stub that `command -v java` finds
-# but which has no runtime, so we test with `java -version`.
-if ! java -version >/dev/null 2>&1 && [ "$(uname -s)" = "Darwin" ]; then
-  if ! brew list --versions openjdk@17 >/dev/null 2>&1; then
-    echo "Installing openjdk@17 via brew (required by sdkmanager + gradle)..."
-    brew install openjdk@17
+# --- JDK 17 (needed by sdkmanager + gradle; the example's Gradle 8.2/AGP 8.2
+# doesn't run on JDK 21+). Detect a real JDK in order:
+#   1) existing JAVA_HOME, 2) macOS java_home (finds Temurin etc.), 3) brew
+#   openjdk@17 formula (installs without an admin password; the temurin cask
+#   needs one). macOS /usr/bin/java is a stub, so we test with java -version.
+if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
+  if [ -x /usr/libexec/java_home ] && JH="$(/usr/libexec/java_home -v 17 2>/dev/null)" && [ -n "$JH" ] && [ -x "$JH/bin/java" ]; then
+    export JAVA_HOME="$JH"
+  elif [ "$(uname -s)" = "Darwin" ]; then
+    if ! brew list --versions openjdk@17 >/dev/null 2>&1; then
+      echo "Installing openjdk@17 via brew (required by sdkmanager + gradle)..."
+      brew install openjdk@17
+    fi
+    export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
   fi
-  export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+fi
+if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
   export PATH="$JAVA_HOME/bin:$PATH"
-  echo "JAVA_HOME=$JAVA_HOME"
+  echo "Using JDK: $JAVA_HOME"
+elif ! java -version >/dev/null 2>&1; then
+  echo "No JDK found — set JAVA_HOME to a JDK 17 (Temurin recommended) and retry." >&2
+  exit 1
+else
+  echo "Using java from PATH (JAVA_HOME not set)."
 fi
 
-# Locate sdkmanager (brew cask path or PATH)
+# --- Locate sdkmanager: prefer the SDK's own cmdline-tools, then the brew
+# cask path, then PATH.
 SDKM="$(command -v sdkmanager 2>/dev/null || true)"
-for p in /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager \
+for p in "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+         /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager \
          /usr/local/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager; do
   [ -z "$SDKM" ] && [ -x "$p" ] && SDKM="$p"
 done
@@ -171,24 +184,25 @@ case "$(uname -s)" in
     fi
     ;;
   Linux|MINGW*|MSYS*|CYGWIN*)
-    echo "Note: install Android cmdline-tools via your package manager or set ANDROID_HOME." >&2
+    echo "Note: ensure Android cmdline-tools are installed (or set ANDROID_HOME to an SDK that has them)." >&2
     ;;
 esac
 
-# Re-locate after possible brew install
+# Re-locate after a possible install
 [ -z "$SDKM" ] && SDKM="$(command -v sdkmanager 2>/dev/null || true)"
+[ -z "$SDKM" ] && [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ] && SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 [ -z "$SDKM" ] && [ -x /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager ] && SDKM=/opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager
-
 if [ -z "$SDKM" ]; then
-  echo "sdkmanager not found — install android-commandlinetools (macOS) or set ANDROID_HOME." >&2
+  echo "sdkmanager not found — install Android cmdline-tools (macOS: brew install --cask android-commandlinetools) or set ANDROID_HOME." >&2
   exit 1
 fi
+echo "Using sdkmanager: $SDKM"
 
-# Install SDK components (sdkmanager is idempotent — skips what's installed)
+# --- Install SDK components (sdkmanager is idempotent — skips what's installed)
 mkdir -p "$ANDROID_HOME"
 echo "Accepting Android SDK licenses..."
 yes | "$SDKM" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
-echo "Installing Android SDK components (platform-tools, platform, build-tools, NDK)..."
+echo "Installing Android SDK components (platform-tools, platforms, build-tools, NDK)..."
 "$SDKM" --sdk_root="$ANDROID_HOME" \
   "platform-tools" \
   "platforms;android-34" \
@@ -206,33 +220,80 @@ if [ -d "$ANDROID_NDK_HOME" ]; then
   command -v gomobile >/dev/null 2>&1 && gomobile init 2>&1 | tail -3 || true
 else
   echo "NDK not found at $ANDROID_NDK_HOME — Android build may fail." >&2
+  exit 1
 fi
+echo "Android toolchain ready: $ANDROID_HOME"
 """
 
 ["env:setup:emulator"]
-description = "Install Android emulator + system image + create AVD (local dev only, for run:android)"
+description = "Install Android emulator + system image + create AVD (local dev only, for run:android) — idempotent"
 dir = "{{config_root}}/myapp"
 run = """
+set -e
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-SDKM="$(command -v sdkmanager 2>/dev/null || true)"
-[ -z "$SDKM" ] && [ -x /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager ] && SDKM=/opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager
-if [ -z "$SDKM" ]; then
-  echo "sdkmanager not found — run 'mise run env:setup:android' first" >&2
+
+# sdkmanager/avdmanager are Java tools: make sure a JDK is available (same
+# detection as env:setup:android — each task is its own process, so it does
+# not inherit the other task's JAVA_HOME).
+if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
+  if [ -x /usr/libexec/java_home ] && JH="$(/usr/libexec/java_home -v 17 2>/dev/null)" && [ -n "$JH" ] && [ -x "$JH/bin/java" ]; then
+    export JAVA_HOME="$JH"
+  elif [ "$(uname -s)" = "Darwin" ] && [ -d "$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home" ]; then
+    export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+  fi
+fi
+if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+if ! java -version >/dev/null 2>&1; then
+  echo "No JDK found — run 'mise run env:setup:android' first or set JAVA_HOME." >&2
   exit 1
 fi
 
-# Install emulator + a system image (large download). Idempotent.
-echo "Installing Android emulator + system image (large download)..."
-"$SDKM" --sdk_root="$ANDROID_HOME" "emulator" "system-images;android-35;google_apis;arm64-v8a"
-
-# Create the AVD if missing
+# Locate tools: prefer the SDK's own cmdline-tools so the AVD is created
+# against the right SDK root (the brew `command -v` shims point at the cask's
+# own root and produce broken AVDs with <build> placeholders).
+SDKM="$(command -v sdkmanager 2>/dev/null || true)"
 AVDMGR="$(command -v avdmanager 2>/dev/null || true)"
-[ -z "$AVDMGR" ] && [ -x /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/avdmanager ] && AVDMGR=/opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/avdmanager
-[ -z "$AVDMGR" ] && [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" ] && AVDMGR="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
-if [ -n "$AVDMGR" ] && ! "$AVDMGR" list avd 2>/dev/null | grep -q "Name: irgo"; then
-  echo "Creating AVD 'irgo'..."
-  echo no | "$AVDMGR" create avd -n irgo -k "system-images;android-35;google_apis;arm64-v8a" --device "pixel_7" 2>/dev/null || true
+for p in "$ANDROID_HOME/cmdline-tools/latest/bin" \
+         /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin \
+         /usr/local/share/android-commandlinetools/cmdline-tools/latest/bin; do
+  [ -z "$SDKM" ] && [ -x "$p/sdkmanager" ] && SDKM="$p/sdkmanager"
+  [ -z "$AVDMGR" ] && [ -x "$p/avdmanager" ] && AVDMGR="$p/avdmanager"
+done
+if [ -z "$SDKM" ] || [ -z "$AVDMGR" ]; then
+  echo "sdkmanager/avdmanager not found — run 'mise run env:setup:android' first." >&2
+  exit 1
 fi
+echo "Using sdkmanager: $SDKM"
+echo "Using avdmanager: $AVDMGR"
+
+# Pick the system-image ABI for this machine: arm64 on Apple Silicon,
+# x86_64 everywhere else (Intel Mac, Windows, Linux).
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64) ABI="arm64-v8a" ;;
+  *) ABI="x86_64" ;;
+esac
+SYSIMG="system-images;android-35;google_apis;$ABI"
+echo "System image: $SYSIMG"
+
+# Install emulator + platform-tools + system image (large download). Idempotent.
+echo "Installing Android emulator + system image (large download)..."
+"$SDKM" --sdk_root="$ANDROID_HOME" "emulator" "platform-tools" "$SYSIMG"
+
+# Create the AVD if missing (idempotent). --device can fail when the bundled
+# devices.xml lacks the requested profile, so use the default device profile.
+# 'echo no' declines a custom hardware profile prompt.
+if [ ! -d "$HOME/.android/avd/irgo.avd" ] || ! "$AVDMGR" list avd 2>/dev/null | grep -q "Name: irgo"; then
+  echo "Creating AVD 'irgo' ($SYSIMG)..."
+  echo no | "$AVDMGR" create avd -n irgo -k "$SYSIMG" --force
+  # Normalize any <build> placeholders avdmanager may have written for name/id.
+  if [ -f "$HOME/.android/avd/irgo.avd/config.ini" ]; then
+    sed -i.bak -e 's/^avd.id=<build>$/avd.id=irgo/' -e 's/^avd.name=<build>$/avd.name=irgo/' \
+      "$HOME/.android/avd/irgo.avd/config.ini" && rm -f "$HOME/.android/avd/irgo.avd/config.ini.bak"
+  fi
+fi
+"$AVDMGR" list avd 2>/dev/null | grep -A1 "Name: irgo" | head -2
 echo "Emulator ready — boot with: $ANDROID_HOME/emulator/emulator -avd irgo"
 """
 
