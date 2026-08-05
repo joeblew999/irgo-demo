@@ -323,42 +323,63 @@ echo "Emulator ready — boot with: $ANDROID_HOME/emulator/emulator -avd irgo"
 """
 
 ["env:uninstall:android"]
-description = "Remove everything env:setup:android installs (JDK, cmdline-tools, SDK)"
+description = "Remove everything env:setup:android/emulator installs + runtime residue — the exact inverse, self-contained"
 dir = "{{config_root}}/myapp"
 run = """
+# --- Mobile Go tools (gomobile/gobind) installed by env:tools ---
+gobin="$(go env GOBIN 2>/dev/null || echo "$(go env GOPATH)/bin")"
+for tool in gomobile gobind; do
+  if [ -f "$gobin/$tool" ]; then
+    echo "Removing $tool from $gobin"
+    rm -f "$gobin/$tool"
+  fi
+done
+# Temp x/mobile clone + go.work created by irgo mobile builds. Use $TMPDIR:
+# on macOS that is /var/folders/..., not /tmp.
+rm -rf "${TMPDIR:-/tmp}/golang-mobile" 2>/dev/null || true
+rm -rf "/tmp/golang-mobile" 2>/dev/null || true
+rm -f go.work go.work.sum 2>/dev/null || true
+
+# --- JDK / cmdline-tools installed via brew (macOS) ---
 case "$(uname -s)" in
   Darwin)
-    echo "Removing openjdk@17 JDK (installed by env:setup:android)..."
-    brew uninstall openjdk@17 2>/dev/null || echo "  openjdk@17 not installed or already removed"
+    echo "Removing JDK (openjdk@17 formula and/or temurin cask)..."
+    brew uninstall --formula openjdk@17 2>/dev/null || echo "  openjdk@17 not installed or already removed"
+    brew uninstall --cask temurin@17 2>/dev/null || echo "  temurin@17 not installed or already removed"
     echo "Removing android-commandlinetools cask..."
     brew uninstall --cask android-commandlinetools 2>/dev/null || echo "  android-commandlinetools not installed or already removed"
+    # Emulator preferences + temp residue (macOS paths)
+    rm -f "$HOME/Library/Preferences/com.android.Emulator.plist" 2>/dev/null || true
+    rm -rf "$HOME/Library/Caches/TemporaryItems/avd" 2>/dev/null || true
     ;;
   Linux)
-    echo "Linux: remove Android cmdline-tools via your package manager (or delete \\$ANDROID_HOME)."
+    echo "Linux: remove Android cmdline-tools via your package manager (or delete \\$ANDROID_HOME)." >&2
     ;;
   MINGW*|MSYS*|CYGWIN*)
-    echo "Windows: remove Android cmdline-tools via your package manager (or delete \\$ANDROID_HOME)."
+    echo "Windows: remove Android cmdline-tools via your package manager (or delete \\$ANDROID_HOME)." >&2
     ;;
   *)
     echo "Unsupported platform: $(uname -s)" >&2
     ;;
 esac
 
-# Remove AVDs created by env:setup:emulator (stored outside the SDK)
-echo "Removing AVDs..."
-rm -rf "$HOME/.android/avd/irgo.avd" "$HOME/.android/avd/irgo.ini" 2>/dev/null || true
+# --- Runtime residue the emulator/gradle leave behind ---
+echo "Removing ~/.android (AVDs, adb keys, emulator state)..."
+rm -rf "$HOME/.android" 2>/dev/null || true
+echo "Removing ~/.gradle (caches from Android builds)..."
+rm -rf "$HOME/.gradle" 2>/dev/null || true
 
-# Remove the SDK directory only if it's the one we manage (default location).
-# Skip if ANDROID_HOME points somewhere custom — leave a dev's own SDK alone.
-# The SDK dir contains platform-tools (adb), platforms, build-tools, the NDK,
-# the emulator and system images — so this removes all of them at once.
+# --- SDK directory (only if it's the default location we manage; leave a
+# dev's own custom SDK alone) ---
 sdk="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 if [ -n "$ANDROID_HOME" ] && [ "$sdk" != "$HOME/Library/Android/sdk" ]; then
   echo "ANDROID_HOME is custom ($sdk) — leaving it in place. Remove manually if desired."
 else
   echo "Removing SDK directory (SDK, NDK, emulator, system images): $sdk"
-  rm -rf "$sdk"
+  rm -rf "$sdk" 2>/dev/null || true
+  rmdir "$HOME/Library/Android" 2>/dev/null || true   # empty parent
 fi
+echo "Android tooling removed."
 """
 
 ["serve:dev"]
