@@ -1,28 +1,21 @@
-# mise/tasks/dev.toml — irgo-demo day-to-day commands.
-# mise auto-discovers .toml task files here (a default task dir), so no
-# `[task_config] includes` is needed in mise.toml.
-# All tasks run inside myapp/ where the project lives.
+# mise/tasks/dev.toml — MAINTAINER TOOLING ONLY.
 #
-# One task remains: install the irgo CLI version pinned by IRGO_REPLACE, so
-# this repo and the CLI that generated it stay in step. Everything else —
-# builds, runs, toolchains, host packages, assets — is the CLI's own job.
-
-# Everything else is a plain `irgo` call — run it directly from myapp/ rather
-# than through a wrapper here:
-#   irgo serve | dev | test
-#   irgo assets   (templ + Tailwind CSS — both gitignored but embedded)
-#   irgo build ios [--sim] | android | all
-#   irgo build desktop [darwin|windows|linux|all]  (installs mingw-w64 as needed)
-#   irgo build ios --sim | --device --team ID
-#   irgo install-tools | uninstall-tools [--all]   (Go tools + host packages)
-#   irgo install-tools android | uninstall-tools android --remove-jdk
-#   irgo run ios [--dev] | android [--no-window] | desktop [--dev]
-#   irgo install-tools android [--emulator] | doctor android
-#   irgo uninstall-tools android --remove-jdk
-# `irgo help` is the reference. Only tasks holding logic the CLI does not own
-# nothing else lives here.
-
-
+# Nothing here is needed to use irgo. A developer needs the irgo CLI and
+# nothing else: it builds, runs, provisions its own toolchains and host
+# packages, generates assets, and reports what the machine can do.
+#
+#   irgo doctor    what this host can and cannot build
+#   irgo help      every command
+#
+# These tasks exist for whoever maintains THIS demo repo against the
+# joeblew999/irgo fork:
+#
+#   env:tools   install the CLI version pinned by IRGO_REPLACE (mise.toml),
+#               so the repo and the CLI that generated it stay in step
+#   cli:bump    move the pin: tag the fork, update IRGO_REPLACE, regenerate
+#               myapp/, and verify — all of it, or none of it
+#   cli:regen   regenerate myapp/ from the pinned CLI
+#   cli:verify  fail if the pin and myapp/go.mod disagree (CI runs this)
 
 ["env:tools"]
 description = "Install the irgo CLI (fork) + irgo install-tools (templ pinned to go.mod, air, gomobile) — idempotent"
@@ -43,7 +36,15 @@ IRGO_FORK_DIR="${IRGO_FORK_DIR:-$HOME/workspace/go/src/github.com/joeblew999/irg
 # generated file the source of truth for its own generator, which meant
 # regenerating myapp/ destroyed the pin.
 IRGO_FORK_TAG="${IRGO_FORK_TAG:-${IRGO_REPLACE##* }}"
-if ! command -v irgo >/dev/null 2>&1; then
+# Reinstall whenever the pin moves, not just when irgo is absent. Checking only
+# `command -v irgo` meant a machine that already had *any* irgo silently kept
+# it, so bumping IRGO_REPLACE upgraded nothing and builds ran against a stale
+# CLI while looking fine.
+STAMP="$HOME/.irgo/cli-tag"
+INSTALLED="$(cat "$STAMP" 2>/dev/null || true)"
+if ! command -v irgo >/dev/null 2>&1 || [ "$INSTALLED" != "$IRGO_FORK_TAG" ]; then
+  [ -n "$INSTALLED" ] && [ "$INSTALLED" != "$IRGO_FORK_TAG" ] \
+    && echo "irgo pin moved: $INSTALLED -> $IRGO_FORK_TAG (reinstalling)"
   if [ -d "$IRGO_FORK_DIR" ]; then
     echo "Installing irgo from fork checkout ($IRGO_FORK_DIR)..."
     (cd "$IRGO_FORK_DIR" && go install ./cmd/irgo) || go install github.com/stukennedy/irgo/cmd/irgo@v0.3.1
@@ -61,6 +62,7 @@ if ! command -v irgo >/dev/null 2>&1; then
     echo "irgo fork not found and git unavailable — installing released CLI (v0.3.1). Set IRGO_FORK_DIR to use the fork." >&2
     go install github.com/stukennedy/irgo/cmd/irgo@v0.3.1
   fi
+  mkdir -p "$(dirname "$STAMP")" && echo "$IRGO_FORK_TAG" > "$STAMP"
 fi
 # Delegate tool installs to the CLI itself: `irgo install-tools` pins the
 # templ generator to the project's go.mod version (no @latest drift) and
@@ -71,3 +73,79 @@ if [ -z "$IRGO_BIN" ]; then
 fi
 "$IRGO_BIN" install-tools
 """
+
+# --- maintainer tasks --------------------------------------------------------
+# These are for whoever maintains this demo against the fork, not for devs
+# using irgo. A dev needs `irgo` and nothing here.
+
+["cli:bump"]
+description = "Bump the pinned irgo CLI: tag the fork, update IRGO_REPLACE, regenerate myapp, verify"
+dir = "{{config_root}}"
+run = """
+set -e
+TAG="{{arg(name="tag")}}"
+[ -n "$TAG" ] || { echo "usage: mise run cli:bump <tag>" >&2; exit 1; }
+FORK="${IRGO_FORK_DIR:-$HOME/workspace/go/src/github.com/joeblew999/irgo}"
+[ -d "$FORK" ] || { echo "fork checkout not found at $FORK" >&2; exit 1; }
+
+# 1. Tag and publish the fork. Refuse on a dirty tree: a tag that does not
+#    match what was built is the whole problem this task exists to prevent.
+if [ -n "$(git -C "$FORK" status --porcelain)" ]; then
+  echo "fork has uncommitted changes — commit them before bumping" >&2
+  git -C "$FORK" status --short >&2
+  exit 1
+fi
+if ! git -C "$FORK" rev-parse "$TAG" >/dev/null 2>&1; then
+  git -C "$FORK" tag "$TAG"
+fi
+git -C "$FORK" push -q origin "$(git -C "$FORK" branch --show-current)"
+git -C "$FORK" push origin "$TAG"
+
+# 2. Move the pin. Match the whole line rather than the old version: chaining
+#    edits off an assumed previous value is how the pin silently stuck at .29
+#    for six releases while every bump looked like it worked.
+python3 - "$TAG" <<'PY'
+import re, sys
+tag = sys.argv[1]
+p = 'mise.toml'
+s = open(p).read()
+new = f'IRGO_REPLACE = "github.com/joeblew999/irgo {tag}"'
+s2, n = re.subn(r'IRGO_REPLACE = "[^"]*"', new, s)
+if n != 1:
+    raise SystemExit(f'expected exactly 1 IRGO_REPLACE line, found {n}')
+open(p, 'w').write(s2)
+print(f'  pin -> {tag}')
+PY
+
+# 3. Rebuild the CLI at the new pin, then regenerate the app from it.
+mise run env:tools
+mise run cli:regen
+
+# 4. Prove the pin actually moved everywhere.
+mise run cli:verify
+echo
+echo "Bumped to $TAG. Review and commit."
+"""
+
+["cli:regen"]
+description = "Regenerate myapp/ from the pinned CLI (preserves gitignored local assets)"
+dir = "{{config_root}}"
+run = """
+set -e
+# appicon.png and irgo.package.toml are gitignored, so git cannot restore them.
+TMP="$(mktemp -d)"
+for f in appicon.png irgo.package.toml; do
+  [ -f "myapp/$f" ] && cp "myapp/$f" "$TMP/"
+done
+rm -rf myapp
+irgo new myapp
+for f in appicon.png irgo.package.toml; do
+  [ -f "$TMP/$f" ] && cp "$TMP/$f" "myapp/"
+done
+rm -rf "$TMP"
+"""
+
+["cli:verify"]
+description = "Fail if the pinned CLI and myapp/go.mod disagree"
+dir = "{{config_root}}/myapp"
+run = "irgo doctor --strict"

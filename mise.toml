@@ -1,4 +1,7 @@
-# mise.toml — irgo-demo
+# mise.toml — irgo-demo (MAINTAINER TOOLING).
+#
+# Developers using irgo do not need mise. This exists so this demo repo can
+# pin, install and verify the fork CLI it is generated from.
 # Go toolchain for this repo (irgo requires Go 1.21+)
 # node for Tailwind CLI + frontend tooling, bun for the CSS build
 #
@@ -20,7 +23,7 @@ bun = "latest"
 # The fork keeps the upstream module path (so the replace is transparent), which
 # is also why the CLI is built from a checkout rather than `go install`ed.
 [env]
-IRGO_REPLACE = "github.com/joeblew999/irgo v0.4.0-androidapi21.29"
+IRGO_REPLACE = "github.com/joeblew999/irgo v0.4.0-androidapi21.37"
 
 # Fetch the fork straight from GitHub: skip proxy.golang.org and sum.golang.org
 # for it. Those index a newly pushed tag on their own schedule (minutes to

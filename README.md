@@ -100,15 +100,23 @@ Run these from `myapp/`:
 | `irgo uninstall-tools android --remove-jdk` | Remove everything the CLI installed |
 | `irgo new myapp` | Regenerate the app from the CLI templates |
 
-### What mise is still for
+### mise is maintainer tooling — you do not need it
 
-Exactly one thing: installing the CLI version pinned by `IRGO_REPLACE`, so this
-repo and the CLI that generated it stay in step. Everything else — builds,
-runs, toolchains, host packages, assets — is the CLI's job.
+**If you are using irgo, you need the CLI and nothing else.** It builds, runs,
+provisions its own toolchains and host packages, generates assets, and tells
+you what your machine can do. Start with `irgo doctor`.
+
+mise exists here only for whoever maintains this demo against the fork:
 
 | Task | Description |
 |---|---|
-| `mise run env:tools` | Install the irgo CLI pinned by `IRGO_REPLACE` |
+| `mise run env:tools` | Install the CLI version pinned by `IRGO_REPLACE` |
+| `mise run cli:bump <tag>` | Move the pin: tag the fork, update `IRGO_REPLACE`, regenerate `myapp/`, verify — atomically |
+| `mise run cli:regen` | Regenerate `myapp/` from the pinned CLI |
+| `mise run cli:verify` | Fail if the pin and `myapp/go.mod` disagree (CI runs this) |
+
+| Task | Description |
+|---|---|
 
 
 

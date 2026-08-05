@@ -44,6 +44,12 @@ jobs:
       - name: Regenerate embedded assets
         working-directory: myapp
         run: irgo assets
+      # The pin in mise.toml and the replace directive in myapp/go.mod must
+      # agree; when they drift, CI silently tests a different CLI than the one
+      # the repo claims to use.
+      - name: Verify the CLI pin has not drifted
+        working-directory: myapp
+        run: irgo doctor --strict
       - name: Run Go tests
         working-directory: myapp
         run: go test ./...
