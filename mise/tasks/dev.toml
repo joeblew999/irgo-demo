@@ -488,6 +488,28 @@ fi
 irgo run ios --dev
 """
 
+["run:desktop"]
+description = "Build + launch desktop app (native webview, embedded Go)"
+dir = "{{config_root}}/myapp"
+run = """
+if ! command -v irgo >/dev/null 2>&1; then
+  echo "irgo not found — run 'mise run env:setup' first"
+  exit 1
+fi
+irgo run desktop
+"""
+
+["run:desktop:dev"]
+description = "Build + launch desktop app with devtools enabled (--dev)"
+dir = "{{config_root}}/myapp"
+run = """
+if ! command -v irgo >/dev/null 2>&1; then
+  echo "irgo not found — run 'mise run env:setup' first"
+  exit 1
+fi
+irgo run desktop --dev
+"""
+
 ["build:ios:prod"]
 description = "Build iOS app for device/App Store (Release) — requires Apple Developer signing"
 dir = "{{config_root}}/myapp"
@@ -574,3 +596,9 @@ irgo templ
 irgo build android || true
 gomobile bind -target android -androidapi 21 -o build/android/irgo.aar ./mobile
 """
+
+["build:mobile"]
+description = "Build all mobile frameworks (iOS + Android) — the `irgo build all` equivalent"
+dir = "{{config_root}}/myapp"
+depends = ["build:ios", "build:android"]
+run = "echo 'iOS + Android frameworks built'"

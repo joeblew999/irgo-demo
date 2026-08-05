@@ -70,8 +70,11 @@ Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (build
 | `mise run build:ios:sim` | Build iOS app for the simulator (Debug)  |
 | `mise run build:ios:prod`| Build iOS app for device/App Store (Release) |
 | `mise run build:android` | Build Android framework (`irgo.aar`, needs SDK + NDK) |
+| `mise run build:mobile`  | Build all mobile frameworks (iOS + Android) |
 | `mise run run:ios`       | Build + launch iOS app on the Simulator  |
 | `mise run run:ios:dev`   | Launch iOS app with hot reload            |
+| `mise run run:desktop`   | Build + launch desktop app (native webview) |
+| `mise run run:desktop:dev`| Launch desktop app with devtools        |
 | `mise run check:test`    | Run Go tests                             |
 
 ## Platform targets
