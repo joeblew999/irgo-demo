@@ -3,10 +3,9 @@
 # `[task_config] includes` is needed in mise.toml.
 # All tasks run inside myapp/ where the project lives.
 #
-# Cross-platform: run `mise run env:setup` once per machine — it installs
-# per-platform deps: brew (macOS), apt (Linux), MSYS2 pacman (Windows).
-# Windows devs: these run scripts are POSIX shell — use Git Bash or MSYS2
-# (not PowerShell/cmd).
+# One task remains: install the irgo CLI version pinned by IRGO_REPLACE, so
+# this repo and the CLI that generated it stay in step. Everything else —
+# builds, runs, toolchains, host packages, assets — is the CLI's own job.
 
 # Everything else is a plain `irgo` call — run it directly from myapp/ rather
 # than through a wrapper here:
@@ -14,11 +13,14 @@
 #   irgo assets   (templ + Tailwind CSS — both gitignored but embedded)
 #   irgo build ios [--sim] | android | all
 #   irgo build desktop [darwin|windows|linux|all]  (installs mingw-w64 as needed)
+#   irgo build ios --sim | --device --team ID
+#   irgo install-tools | uninstall-tools [--all]   (Go tools + host packages)
+#   irgo install-tools android | uninstall-tools android --remove-jdk
 #   irgo run ios [--dev] | android [--no-window] | desktop [--dev]
 #   irgo install-tools android [--emulator] | doctor android
 #   irgo uninstall-tools android --remove-jdk
 # `irgo help` is the reference. Only tasks holding logic the CLI does not own
-# (OS packages, iOS release signing) still live below.
+# nothing else lives here.
 
 
 
@@ -68,108 +70,4 @@ if [ -z "$IRGO_BIN" ]; then
   IRGO_BIN="$(go env GOPATH 2>/dev/null || echo "$HOME/go")/bin/irgo"
 fi
 "$IRGO_BIN" install-tools
-"""
-
-["env:setup"]
-description = "One-time: install all dev deps for this platform (Go tools + OS packages)"
-depends = ["env:tools"]
-dir = "{{config_root}}/myapp"
-run = """
-# OS-level packages, per platform (Go tools come from env:tools)
-case "$(uname -s)" in
-  Darwin)
-    for pkg in entr mingw-w64; do
-      if ! brew list --versions "$pkg" >/dev/null 2>&1; then
-        echo "Installing $pkg via brew..."
-        brew install "$pkg"
-      fi
-    done
-    ;;
-  Linux)
-    # Debian/Ubuntu packages: entr (hot reload) + GTK3/WebKit2GTK 4.0
-    # (desktop builds). Idempotent — skips if already installed.
-    if command -v apt-get >/dev/null 2>&1; then
-      if ! command -v entr >/dev/null 2>&1 || ! pkg-config --exists webkit2gtk-4.0 2>/dev/null; then
-        echo "Installing OS packages via apt (entr, GTK3, WebKit2GTK 4.0)..."
-        sudo apt-get update
-        sudo apt-get install -y entr libgtk-3-dev libwebkit2gtk-4.0-dev
-      else
-        echo "Linux OS packages already installed"
-      fi
-    else
-      echo "Linux: not apt-based — install entr, libgtk-3-dev, libwebkit2gtk-4.0-dev manually"
-    fi
-    ;;
-  MINGW*|MSYS*|CYGWIN*)
-    # MSYS2: install the mingw-w64 toolchain (C/C++ compiler for CGO desktop
-    # builds). Idempotent (pacman --needed). Falls back to guidance otherwise.
-    if command -v pacman >/dev/null 2>&1; then
-      echo "Installing mingw-w64 toolchain via pacman..."
-      pacman -S --noconfirm --needed mingw-w64-x86_64-gcc
-    else
-      echo "Windows: install MSYS2 (https://www.msys2.org) with the mingw-w64-x86_64 toolchain."
-    fi
-    ;;
-  *)
-    echo "Unsupported platform: $(uname -s)" >&2
-    ;;
-esac
-
-# Initialize gomobile (no-op on macOS for iOS; needs Android NDK for android)
-command -v gomobile >/dev/null 2>&1 && gomobile init || true
-"""
-
-["env:uninstall"]
-description = "Remove everything 'env:setup' installs (Go tools + OS packages) — the exact inverse"
-dir = "{{config_root}}/myapp"
-run = """
-gobin="$(go env GOBIN 2>/dev/null || echo "$(go env GOPATH)/bin")"
-echo "Removing Go-installed tools from $gobin..."
-for tool in irgo templ air gomobile gobind; do
-  if [ -f "$gobin/$tool" ]; then
-    echo "  removing $tool"
-    rm -f "$gobin/$tool"
-  fi
-done
-
-# Remove the temp x/mobile clone and local go.work created by irgo mobile builds
-rm -rf "${TMPDIR:-/tmp}/golang-mobile" 2>/dev/null || true
-rm -f go.work go.work.sum
-
-case "$(uname -s)" in
-  Darwin)
-    echo "Removing brew packages (entr, mingw-w64)..."
-    brew uninstall --formula mingw-w64 2>/dev/null || echo "  mingw-w64 not installed or already removed"
-    brew uninstall --formula entr 2>/dev/null || echo "  entr not installed or already removed"
-    brew autoremove 2>/dev/null || true
-    ;;
-  Linux)
-    echo "Removing Linux OS packages (entr, GTK3, WebKit2GTK 4.0)..."
-    sudo apt-get remove -y entr libgtk-3-dev libwebkit2gtk-4.0-dev 2>/dev/null || true
-    ;;
-  MINGW*|MSYS*|CYGWIN*)
-    if command -v pacman >/dev/null 2>&1; then
-      echo "Removing mingw-w64 toolchain via pacman..."
-      pacman -R --noconfirm mingw-w64-x86_64-gcc 2>/dev/null || true
-    else
-      echo "Windows: remove MSYS2/mingw packages via pacman."
-    fi
-    ;;
-  *)
-    echo "Unsupported platform: $(uname -s)" >&2
-    ;;
-esac
-"""
-
-["build:ios:prod"]
-description = "Build iOS app for device/App Store (Release) — requires Apple Developer signing"
-dir = "{{config_root}}/myapp"
-run = """
-irgo build ios
-# Release build for physical devices. Signing comes from the Xcode project or
-# pass a team via extra args, e.g.:
-#   mise run build:ios:prod -- -DEVELOPMENT_TEAM=ABCDE12345
-xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
-  -configuration Release -destination 'generic/platform=iOS' \
-  -derivedDataPath build/ios/DerivedData-Release build
 """

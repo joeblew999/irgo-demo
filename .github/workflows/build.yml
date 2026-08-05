@@ -91,9 +91,10 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install OS packages
+      - name: Install host packages (GTK/WebKit for the Linux webview)
         if: matrix.needs_os_pkgs
-        run: mise run env:setup
+        working-directory: myapp
+        run: irgo install-tools
       - name: Build desktop app
         working-directory: myapp
         run: ${{ matrix.cmd }}
@@ -198,13 +199,8 @@ jobs:
       # keychain (e.g. via apple-actions/import-codesign-certs) and set the
       # IOS_TEAM_ID secret. Without it this job is skipped.
       - name: Build iOS Release (device)
-        run: |
-          cd myapp
-          irgo build ios
-          xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
-            -configuration Release -destination 'generic/platform=iOS' \
-            -derivedDataPath build/ios/DerivedData-Release \
-            -DEVELOPMENT_TEAM=${{ secrets.IOS_TEAM_ID }} build
+        working-directory: myapp
+        run: irgo build ios --device --team ${{ secrets.IOS_TEAM_ID }}
       - uses: actions/upload-artifact@v4
         with:
           name: ios-device

@@ -48,7 +48,8 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install OS packages
-        run: mise run env:setup
+        working-directory: myapp
+        run: irgo install-tools
       - name: Build Linux app
         working-directory: myapp
         run: irgo build desktop linux

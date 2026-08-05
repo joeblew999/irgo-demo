@@ -46,11 +46,11 @@ Everything else installs itself on first use — see below.
 
 ```bash
 mise install          # pinned toolchain (go, node, bun)
-mise run env:tools    # the irgo CLI at IRGO_REPLACE + its tools (templ, air, gomobile)
-mise run env:setup    # OPTIONAL: OS packages (entr for hot reload, mingw-w64 for Windows cross-compile)
+mise run env:tools    # the irgo CLI at IRGO_REPLACE
+cd myapp && irgo doctor   # what can this machine build?
 ```
 
-Both are idempotent — safe to re-run any time.
+Idempotent — safe to re-run any time.
 
 **Nothing else to remember, and no ordering to get right.** The CLI provisions
 what a command needs, when that command needs it:
@@ -87,6 +87,7 @@ Run these from `myapp/`:
 | `irgo serve` / `irgo dev` | Web server; `dev` adds hot reload |
 | `irgo build ios` | iOS framework (`Irgo.xcframework`) — macOS only |
 | `irgo build ios --sim` | Runnable iOS Simulator `.app` (scaffolds + drives xcodebuild) |
+| `irgo build ios --device --team ID` | Release build for device / App Store |
 | `irgo run ios` / `--dev` | Launch on the Simulator; `--dev` hot-reloads |
 | `irgo build android` | Android framework (`irgo.aar`) — self-provisions the toolchain |
 | `irgo run android` / `--no-window` | Launch on the emulator; `--no-window` is headless |
@@ -94,25 +95,22 @@ Run these from `myapp/`:
 | `irgo build desktop all` | Every desktop app this host supports |
 | `irgo assets` | Regenerate templ + Tailwind CSS (builds do this already) |
 | `irgo build desktop` | Desktop app for the current OS |
-| `irgo doctor android` | Verify the Android toolchain |
+| `irgo doctor` | **What this host can and cannot build** |
+| `irgo doctor android` | Verify the Android toolchain in detail |
 | `irgo uninstall-tools android --remove-jdk` | Remove everything the CLI installed |
 | `irgo new myapp` | Regenerate the app from the CLI templates |
 
 ### What mise is still for
 
-mise's remaining job is lining this repo up with the CLI, plus the OS-level
-packages the CLI does not own yet:
+Exactly one thing: installing the CLI version pinned by `IRGO_REPLACE`, so this
+repo and the CLI that generated it stay in step. Everything else — builds,
+runs, toolchains, host packages, assets — is the CLI's job.
 
 | Task | Description |
 |---|---|
-| `mise run env:tools` | Install the irgo CLI pinned by `IRGO_REPLACE` + its Go tools |
-| `mise run env:setup` | OS packages: entr, mingw-w64 (brew/apt/pacman) |
-| `mise run env:uninstall` | The exact inverse of `env:setup` |
-| `mise run build:ios:prod` | iOS Release build for device/App Store (signing) |
+| `mise run env:tools` | Install the irgo CLI pinned by `IRGO_REPLACE` |
 
-Everything else is `irgo`. `mise run env:tools` is the one that matters: it
-installs the CLI version pinned by `IRGO_REPLACE`, keeping this repo and the
-CLI in step.
+
 
 ## Platform targets
 
