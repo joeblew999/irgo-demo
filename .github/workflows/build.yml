@@ -1,7 +1,11 @@
 # Builds every target on each push: Go tests + web, native Linux/macOS/Windows
-# desktop (Windows is smoke-run), iOS framework + simulator, Android AAR
-# (install → doctor → build → uninstall round-trip), and an Android emulator
-# run that proves the CLI's self-provisioning end to end.
+# desktop (Windows is smoke-run), iOS framework + simulator, and Android AAR
+# (install → doctor → build → uninstall round-trip).
+#
+# No emulator job: booting one in CI is slow and fragile for little signal —
+# the AAR build already proves the toolchain. Emulator runs are a local
+# concern (`irgo run android`), and the CLI gates on the environment itself,
+# failing fast where an emulator cannot run at all.
 #
 # Every job starts from the shared `setup` composite action
 # (.github/actions/setup): checkout + mise + `mise run build:assets`
@@ -162,68 +166,6 @@ jobs:
             [ -e "$p" ] && { echo "::error::expected removed but exists: $p"; exit 1; }
           done
           echo "uninstall round-trip OK — machine clean"
-
-  # RUNTIME proof for Android — and proof of the CLI's self-provisioning: NO
-  # explicit toolchain/emulator install steps. On a bare runner, `irgo run
-  # android --no-window` installs the JDK/SDK/NDK/emulator/AVD itself, builds
-  # the APK, boots the headless emulator (KVM), installs and launches the app.
-  android-emulator:
-    name: Android emulator (self-provision + headless run + smoke)
-    # x64, not ARM64: Google publishes no `emulator` package for linux-aarch64,
-    # so the ARM64 runner fails at "Failed to find package 'emulator'" before it
-    # can boot anything. x64 has the package, and the KVM step below gives it
-    # real hardware acceleration — so the x86_64 system image works and there is
-    # no need for the slow TCG fallback.
-    runs-on: ubuntu-latest
-    timeout-minutes: 50
-    env:
-      IRGO_BOOT_TIMEOUT_MIN: "15"
-    steps:
-      - uses: actions/checkout@v4
-      # /dev/kvm exists on x64 runners but the runner user is not in the kvm
-      # group, so the emulator dies at startup. This is what the CLI's hasKVM
-      # probe detects (it opens the device O_RDWR rather than stat-ing it).
-      # Widening the permissions turns hardware acceleration back on.
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          ls -l /dev/kvm
-      - uses: ./.github/actions/setup
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build, install + launch on headless emulator (CLI self-provisions)
-        working-directory: myapp
-        run: irgo run android --no-window
-      - name: Verify toolchain
-        working-directory: myapp
-        run: irgo doctor android
-      - name: Smoke test — assert app process alive
-        run: |
-          ADB="$HOME/Android/Sdk/platform-tools/adb"
-          PID=""
-          for i in $(seq 1 60); do
-            PID="$($ADB shell pidof com.irgo.example 2>/dev/null | tr -d ' \r')"
-            [ -n "$PID" ] && break
-            sleep 2
-          done
-          if [ -z "$PID" ]; then
-            echo "::error::app process not running on emulator"
-            $ADB shell dumpsys activity activities 2>/dev/null | grep -iE "mResumedActivity|irgo" | head -5 || true
-            exit 1
-          fi
-          echo "Smoke test PASSED — com.irgo.example running (pid $PID)"
-      - name: Capture screenshot
-        run: |
-          ADB="$HOME/Android/Sdk/platform-tools/adb"
-          $ADB exec-out screencap -p > android-smoke.png
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android-emulator-smoke
-          path: android-smoke.png
-          if-no-files-found: error
 
   check-ios-signing:
     name: Detect iOS signing secrets

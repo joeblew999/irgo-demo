@@ -134,7 +134,7 @@ inventory and upstream tracking (stukennedy/irgo#9, PR #10).
 | Linux desktop | — (needs GTK/WebKit) | `linux-desktop` (ubuntu-22.04) |
 | iOS simulator | ✅ `irgo run ios` | `ios` — framework + simulator app |
 | iOS device | opt-in (needs signing) | `ios-device` — only when `IOS_TEAM_ID` set |
-| Android | ✅ `irgo run android` (self-provisions) | `android` — AAR; `android-emulator` — headless run on ARM64 |
+| Android | ✅ `irgo run android` (self-provisions) | `android` — AAR only (no emulator: slow and fragile in CI) |
 
 ## Notes
 
