@@ -163,6 +163,7 @@ jobs:
   android-emulator:
     name: Android emulator (self-provision + headless run + smoke)
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
