@@ -91,6 +91,8 @@ Run these from `myapp/`:
 | `irgo build android` | Android framework (`irgo.aar`) — self-provisions the toolchain |
 | `irgo run android` / `--no-window` | Launch on the emulator; `--no-window` is headless |
 | `irgo build all` | Both mobile frameworks (skips iOS off-macOS) |
+| `irgo build desktop all` | Every desktop app this host supports |
+| `irgo assets` | Regenerate templ + Tailwind CSS (builds do this already) |
 | `irgo build desktop` | Desktop app for the current OS |
 | `irgo doctor android` | Verify the Android toolchain |
 | `irgo uninstall-tools android --remove-jdk` | Remove everything the CLI installed |
@@ -106,11 +108,11 @@ packages the CLI does not own yet:
 | `mise run env:tools` | Install the irgo CLI pinned by `IRGO_REPLACE` + its Go tools |
 | `mise run env:setup` | OS packages: entr, mingw-w64 (brew/apt/pacman) |
 | `mise run env:uninstall` | The exact inverse of `env:setup` |
-| `mise run build:assets` | `bun install` + templ + Tailwind CSS (has a Windows git-bash workaround) |
-| `mise run build:desktop:{windows,linux,all}` | Cross-compile logic (mingw-w64, GTK/WebKit gating) |
+| `mise run build:ios:prod` | iOS Release build for device/App Store (signing) |
 
-The remaining `build:*` / `run:*` tasks are thin passthroughs to the equivalent
-`irgo` command and exist for discoverability; prefer calling `irgo` directly.
+Everything else is `irgo`. `mise run env:tools` is the one that matters: it
+installs the CLI version pinned by `IRGO_REPLACE`, keeping this repo and the
+CLI in step.
 
 ## Platform targets
 
@@ -122,9 +124,8 @@ The remaining `build:*` / `run:*` tasks are thin passthroughs to the equivalent
 | Android  | gomobile, in-process Go (virtual HTTP)        | `irgo build android` |
 
 **Where each target actually runs.** Android no longer needs an opt-in local
-setup step — the CLI provisions it on first build. See
-[docs/irgo-integration.md](docs/irgo-integration.md) for the workaround
-inventory and upstream tracking (stukennedy/irgo#9, PR #10).
+setup step — the CLI provisions it on first build. `irgo help` is the reference
+for everything the CLI does.
 
 | Target | Locally on macOS | CI (per push) |
 |--------|:---:|---|

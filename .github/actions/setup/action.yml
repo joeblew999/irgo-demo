@@ -1,6 +1,10 @@
 # Shared job preamble for the build/release workflows: provision the mise
-# toolchain (installs the irgo CLI + its tools) and regenerate the
-# gitignored-but-embedded assets (templ + Tailwind CSS) via `mise run build:assets`.
+# toolchain, install the irgo CLI pinned by IRGO_REPLACE, and publish mise's
+# env so later steps can call `irgo` directly.
+#
+# Builds regenerate the gitignored-but-embedded assets (templ + Tailwind CSS)
+# themselves, so there is no assets step here — only jobs that bypass `irgo
+# build` (plain go test/build) run `irgo assets` explicitly.
 #
 # NOTE: GitHub resolves local composite actions BEFORE any checkout runs, so
 # every job must `uses: actions/checkout@v4` as its FIRST step, then this one.
@@ -16,9 +20,9 @@ runs:
     - uses: jdx/mise-action@v4
       with:
         github_token: ${{ inputs.github_token }}
-    - name: Generate templ + build CSS (build:assets)
+    - name: Install the irgo CLI pinned by IRGO_REPLACE
       shell: bash
-      run: mise run build:assets
+      run: mise run env:tools
     # Hand mise's whole env to the job so steps can call `irgo`/`go` directly
     # instead of routing everything through `mise run`. This carries GOPRIVATE
     # (without it, direct steps resolve the fork via proxy.golang.org, which

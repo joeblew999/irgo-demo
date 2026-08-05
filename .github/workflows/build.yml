@@ -8,11 +8,12 @@
 # failing fast where an emulator cannot run at all.
 #
 # Every job starts from the shared `setup` composite action
-# (.github/actions/setup): checkout + mise + `mise run build:assets`
-# (gitignored templ/CSS are regenerated here).
+# (.github/actions/setup): checkout + mise + `mise run env:tools`, which
+# installs the irgo CLI pinned by IRGO_REPLACE.
 #
 # Gotchas:
-#   1. _templ.go + output.css are gitignored but embedded -> build:assets
+#   1. _templ.go + output.css are gitignored but embedded -> irgo build
+#      regenerates them; steps that call go directly run `irgo assets` first
 #   2. webview_go links webkit2gtk-4.0 -> ubuntu-22.04 (not 24.04)
 #   3. iOS device/App Store builds need signing -> gated on IOS_TEAM_ID
 #   4. never ship an exe that was never run -> Windows is smoke-tested
@@ -38,6 +39,11 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+      # This job runs go directly rather than `irgo build`, so it has to ask
+      # for the generated-but-embedded assets itself.
+      - name: Regenerate embedded assets
+        working-directory: myapp
+        run: irgo assets
       - name: Run Go tests
         working-directory: myapp
         run: go test ./...

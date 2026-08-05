@@ -10,14 +10,15 @@
 
 # Everything else is a plain `irgo` call — run it directly from myapp/ rather
 # than through a wrapper here:
-#   irgo serve | dev | templ | test
+#   irgo serve | dev | test
+#   irgo assets   (templ + Tailwind CSS — both gitignored but embedded)
 #   irgo build ios [--sim] | android | all
 #   irgo build desktop [darwin|windows|linux|all]  (installs mingw-w64 as needed)
 #   irgo run ios [--dev] | android [--no-window] | desktop [--dev]
 #   irgo install-tools android [--emulator] | doctor android
 #   irgo uninstall-tools android --remove-jdk
 # `irgo help` is the reference. Only tasks holding logic the CLI does not own
-# (OS packages, bun/CSS, iOS release signing) still live below.
+# (OS packages, iOS release signing) still live below.
 
 
 
@@ -158,38 +159,6 @@ case "$(uname -s)" in
     echo "Unsupported platform: $(uname -s)" >&2
     ;;
 esac
-"""
-
-["css"]
-description = "Rebuild Tailwind CSS (input.css → output.css)"
-dir = "{{config_root}}/myapp"
-run = "bun run css"
-
-["css:watch"]
-description = "Watch Tailwind CSS sources"
-dir = "{{config_root}}/myapp"
-run = "bun run css:watch"
-
-["build:assets"]
-description = "Generate templ + build Tailwind CSS (both gitignored but embedded — run before any build)"
-depends = ["env:tools"]
-dir = "{{config_root}}/myapp"
-run = """
-set -e
-bun install
-# git-bash on Windows strips the Windows Path var, so native tools spawned by
-# native tools (irgo -> templ) fail. Bash CAN run native tools directly, so use
-# `templ generate` via its absolute path there. irgo templ elsewhere.
-case "$(uname -s)" in
-  MINGW*|MSYS*|CYGWIN*)
-    TEMPL="$(command -v templ)"
-    "$TEMPL" generate
-    ;;
-  *)
-    irgo templ
-    ;;
-esac
-bun run css
 """
 
 ["build:ios:prod"]

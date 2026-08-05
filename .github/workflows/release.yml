@@ -2,7 +2,7 @@
 # Triggered by pushing a version tag:  git tag v0.1.0 && git push origin v0.1.0
 #
 # Reuses the same mise tasks as local dev + build.yml (single source of truth):
-#   mise run build:assets -> pinned Go tools + templ + CSS (all gitignored)
+#   irgo assets -> templ + Tailwind CSS (gitignored, but embedded in builds)
 #   build:desktop (macOS), build:desktop:linux, build:desktop:windows (native,
 #   smoke-tested before packaging), build:ios:sim, env:setup:android+build:android
 
@@ -27,7 +27,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build web binary
         working-directory: myapp
-        run: go build -o build/myapp .
+        run: |
+          irgo assets
+          go build -o build/myapp .
       - name: Package
         run: |
           cd myapp/build
