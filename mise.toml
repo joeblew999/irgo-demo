@@ -11,6 +11,13 @@ go = "1.26.5"
 node = "lts"
 bun = "latest"
 
+# All shell tasks are POSIX scripts — force bash on every OS. mise defaults to
+# `sh -c` on Unix but `cmd /c` on Windows, where our `#` comments/`for` loops
+# break ('#' is not recognized...). Bash ships on GitHub Windows runners
+# (Git Bash) and is the default on macOS/Linux.
+[task_config]
+shell = "bash -c"
+
 # Android env vars are per-platform — see mise.macos.toml, mise.linux.toml,
 # mise.windows.toml. The SDK path and the home-dir env var differ by OS (HOME
 # on macOS/Linux, LOCALAPPDATA on Windows), and a template like {{env.HOME}}
