@@ -30,6 +30,7 @@ jobs:
     name: Check (tests + web)
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -74,6 +75,7 @@ jobs:
             smoke: true
     runs-on: ${{ matrix.os }}
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -112,6 +114,7 @@ jobs:
     name: iOS framework + simulator
     runs-on: macos-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -129,6 +132,7 @@ jobs:
     name: Android framework (install → doctor → build → uninstall round-trip)
     runs-on: macos-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -160,6 +164,7 @@ jobs:
     name: Android emulator (self-provision + headless run + smoke)
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -209,6 +214,7 @@ jobs:
     needs: [ios, check-ios-signing]
     if: needs.check-ios-signing.outputs.has_ios_team == 'true'
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

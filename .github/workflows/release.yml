@@ -21,6 +21,7 @@ jobs:
     name: Web binary
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -39,6 +40,7 @@ jobs:
     name: Linux desktop
     runs-on: ubuntu-22.04   # webkit2gtk-4.0 unavailable on 24.04
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -59,6 +61,7 @@ jobs:
     name: macOS desktop
     runs-on: macos-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -77,6 +80,7 @@ jobs:
     name: Windows desktop (native build + smoke test)
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -116,6 +120,7 @@ jobs:
     name: iOS framework + simulator app
     runs-on: macos-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -135,6 +140,7 @@ jobs:
     name: Android framework
     runs-on: macos-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
