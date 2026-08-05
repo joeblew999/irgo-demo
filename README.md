@@ -9,116 +9,142 @@ native iOS, Android, desktop, and web apps from a single Go codebase
 ## Stack
 
 - **Go 1.26.5** + **node LTS** — managed via [mise](https://mise.jdx.dev) (OS-agnostic toolchain)
-- `myapp/` — the irgo scaffold (`irgo new myapp`)
+- `myapp/` — **generated output**, not source. It is produced wholesale by
+  `irgo new myapp`. Never hand-edit it; change the CLI templates and regenerate.
+
+## How the CLI and this repo stay lined up
+
+One value, in `mise.toml`, is the single source of truth:
+
+```toml
+[env]
+IRGO_REPLACE = "github.com/joeblew999/irgo v0.4.0-androidapi21.24"
+```
+
+Both sides read it:
+
+- `irgo new myapp` writes it into `myapp/go.mod` as the `replace` directive
+- `mise run env:tools` builds that exact CLI version
+
+So the CLI that generated the app and the CLI you run against it cannot drift.
+It lives in `mise.toml` rather than `myapp/go.mod` because `myapp/` is
+regenerated wholesale — a pin kept inside it would be destroyed by the very
+command that rebuilds it, and it was previously the only record of which CLI
+built the project.
+
+To move to a new fork build: bump `IRGO_REPLACE`, then `mise run env:tools`.
 
 ## Prerequisites
 
-- [mise](https://mise.jdx.dev/getting-started.html) — installs the pinned toolchain
-  (`go`, `node`, `bun`) automatically
-- The [mise VS Code extension](https://marketplace.visualstudio.com/items?itemName=jdx.mise)
-  (`jdx.mise`) — task runner + tool integration in the editor
-- **Xcode** (from the App Store) for iOS. **Android is opt-in** —
-  `mise run env:setup:android` installs the SDK/NDK (fully reversible with
-  `mise run env:uninstall:android`); CI builds Android without any local setup.
-- The rest is handled by `mise run env:setup` (see below)
+- [mise](https://mise.jdx.dev/getting-started.html) — installs the pinned
+  toolchain (`go`, `node`, `bun`) and the matching irgo CLI
+- **Xcode** (App Store) for iOS. Nothing else is required up front.
+
+Everything else installs itself on first use — see below.
 
 ## First-time setup (new dev machine)
 
 ```bash
-mise install          # install pinned toolchain (go, node, bun)
-mise run env:tools    # install the irgo CLI (fork) + its tools (templ, air, gomobile)
-mise run env:setup    # OPTIONAL: OS packages (entr, mingw-w64) — only for hot reload / Windows cross-compile
+mise install          # pinned toolchain (go, node, bun)
+mise run env:tools    # the irgo CLI at IRGO_REPLACE + its tools (templ, air, gomobile)
+mise run env:setup    # OPTIONAL: OS packages (entr for hot reload, mingw-w64 for Windows cross-compile)
 ```
 
-**Android needs nothing to remember.** `irgo build android` / `irgo run android`
-self-provision the JDK 17, SDK, NDK (and emulator for `run`) on first use —
-managed under `~/.irgo` and `ANDROID_HOME`, no brew/apt/winget. Everything can
-be cleaned down with `irgo uninstall-tools android --remove-jdk` (or
-`mise run env:uninstall:android`), and `irgo doctor android` verifies the
-toolchain.
+Both are idempotent — safe to re-run any time.
 
-`env:setup`/`env:tools` are idempotent — safe to re-run any time.
+**Nothing else to remember, and no ordering to get right.** The CLI provisions
+what a command needs, when that command needs it:
+
+- `irgo build android` / `irgo run android` install JDK 17, SDK, NDK (and the
+  emulator + AVD for `run`) under `~/.irgo` and `ANDROID_HOME` — no
+  brew/apt/winget. Clean down with `irgo uninstall-tools android --remove-jdk`;
+  verify with `irgo doctor android`.
+- `irgo build ios|android` runs `templ` itself (`_templ.go` is gitignored but
+  the mobile package imports it) and installs `gomobile`/`gobind` if missing.
+- `irgo build|run ios|android` scaffold `ios/Example` / `android/Example` from
+  the CLI's embedded templates (missing-only, idempotent). They are not checked in.
+- iOS targets refuse to run off macOS with a clear error instead of failing
+  later on a missing `xcodebuild`; `irgo build all` just skips iOS off-macOS.
 
 ## Quickstart
 
 ```bash
-mise run serve      # run web server without file watching (no entr needed)
+cd myapp
+irgo serve       # web server, no file watching
+irgo dev         # hot reload (needs entr)
 ```
 
 Then open http://localhost:8080.
 
-For hot reload (requires `entr` — installed by `mise run env:setup`):
+## Commands
 
-```bash
-mise run serve:dev
-```
+The CLI is the reference — `irgo help` and `irgo help <command>` are the source
+of truth, including the `IRGO_REPLACE` / `IRGO_PATH` contract in `irgo help new`.
+Run these from `myapp/`:
 
-## Mise tasks
+| Command | Description |
+|---|---|
+| `irgo serve` / `irgo dev` | Web server; `dev` adds hot reload |
+| `irgo build ios` | iOS framework (`Irgo.xcframework`) — macOS only |
+| `irgo build ios --sim` | Runnable iOS Simulator `.app` (scaffolds + drives xcodebuild) |
+| `irgo run ios` / `--dev` | Launch on the Simulator; `--dev` hot-reloads |
+| `irgo build android` | Android framework (`irgo.aar`) — self-provisions the toolchain |
+| `irgo run android` / `--no-window` | Launch on the emulator; `--no-window` is headless |
+| `irgo build all` | Both mobile frameworks (skips iOS off-macOS) |
+| `irgo build desktop` | Desktop app for the current OS |
+| `irgo doctor android` | Verify the Android toolchain |
+| `irgo uninstall-tools android --remove-jdk` | Remove everything the CLI installed |
+| `irgo new myapp` | Regenerate the app from the CLI templates |
 
-Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (builds),
-`run:` (launches), `check:` (validation).
+### What mise is still for
 
-| Task            | Description                                        |
-|-----------------|----------------------------------------------------|
-| `mise run env:setup`| One-time: install all dev deps (Go tools + OS pkgs)|
-| `mise run env:tools`| Install pinned Go tools (irgo/templ/air/gomobile) |
-| `mise run env:uninstall`| Remove everything `env:setup` installed (inverse) |
-| `mise run env:setup:android`| Install Android SDK + NDK (brew + sdkmanager) |
-| `mise run env:uninstall:android`| Remove Android SDK + cmdline-tools |
-| `mise run serve`| Web server, no file watching (pure mise)           |
-| `mise run serve:dev`| Dev server with hot reload (needs `entr`)        |
-| `mise run css`  | Rebuild Tailwind CSS (`input.css` → `output.css`)  |
-| `mise run css:watch`| Watch Tailwind CSS sources                    |
-| `mise run build:web`     | Build web server binary                    |
-| `mise run build:templ`   | Generate `_templ.go` from `*.templ`         |
-| `mise run build:assets`  | Generate templ + build CSS (run before any build) |
-| `mise run build:desktop` | Build desktop app for current platform (auto-detects OS) |
-| `mise run build:desktop:windows` | Build Windows exe (native on Windows; cross-compiles on macOS) |
-| `mise run build:desktop:linux`   | Build Linux app (native Linux only)     |
-| `mise run build:desktop:all`     | Build every app the current OS supports |
-| `mise run build:ios`     | Build iOS framework (`Irgo.xcframework`, needs Xcode) |
-| `mise run build:ios:sim` | Build iOS app for the simulator (Debug)  |
-| `mise run build:ios:prod`| Build iOS app for device/App Store (Release) |
-| `mise run build:android` | Build Android framework (`irgo.aar`, needs SDK + NDK) |
-| `mise run build:mobile`  | Build all mobile frameworks (iOS + Android) |
-| `mise run run:ios`       | Build + launch iOS app on the Simulator  |
-| `mise run run:ios:dev`   | Launch iOS app with hot reload            |
-| `mise run run:desktop`   | Build + launch desktop app (native webview) |
-| `mise run run:desktop:dev`| Launch desktop app with devtools        |
-| `mise run check:test`    | Run Go tests                             |
+mise's remaining job is lining this repo up with the CLI, plus the OS-level
+packages the CLI does not own yet:
+
+| Task | Description |
+|---|---|
+| `mise run env:tools` | Install the irgo CLI pinned by `IRGO_REPLACE` + its Go tools |
+| `mise run env:setup` | OS packages: entr, mingw-w64 (brew/apt/pacman) |
+| `mise run env:uninstall` | The exact inverse of `env:setup` |
+| `mise run build:assets` | `bun install` + templ + Tailwind CSS (has a Windows git-bash workaround) |
+| `mise run build:desktop:{windows,linux,all}` | Cross-compile logic (mingw-w64, GTK/WebKit gating) |
+
+The remaining `build:*` / `run:*` tasks are thin passthroughs to the equivalent
+`irgo` command and exist for discoverability; prefer calling `irgo` directly.
 
 ## Platform targets
 
 | Platform | How it runs                                   | Command            |
 |----------|-----------------------------------------------|--------------------|
-| Web      | Standard HTTP server                          | `mise run serve`   |
-| Desktop  | Real localhost server + native webview (CGO)  | `mise run build:desktop` |
-| iOS      | gomobile, in-process Go (virtual HTTP)        | `mise run build:ios` |
-| Android  | gomobile, in-process Go (virtual HTTP)        | `mise run build:android` |
+| Web      | Standard HTTP server                          | `irgo serve`       |
+| Desktop  | Real localhost server + native webview (CGO)  | `irgo build desktop` |
+| iOS      | gomobile, in-process Go (virtual HTTP)        | `irgo build ios`   |
+| Android  | gomobile, in-process Go (virtual HTTP)        | `irgo build android` |
 
-**Where each target actually runs** — local machine vs CI is a deliberate
-split; Android/Windows tooling is heavy and is opt-in locally. See
-[docs/irgo-integration.md](docs/irgo-integration.md) for the full workaround
-inventory and the upstream tracking (stukennedy/irgo#9, PR #10).
+**Where each target actually runs.** Android no longer needs an opt-in local
+setup step — the CLI provisions it on first build. See
+[docs/irgo-integration.md](docs/irgo-integration.md) for the workaround
+inventory and upstream tracking (stukennedy/irgo#9, PR #10).
 
 | Target | Locally on macOS | CI (per push) |
 |--------|:---:|---|
-| Web | ✅ `mise run serve` | `check` — tests + web binary |
-| macOS desktop | ✅ `mise run build:desktop` | `macos-desktop` |
-| Windows desktop | opt-in cross-compile | `windows-desktop` — native build **+ smoke run** |
-| Linux desktop | — | `linux-desktop` (ubuntu-22.04) |
-| iOS simulator | ✅ `mise run run:ios` | `ios` — framework + simulator app |
+| Web | ✅ `irgo serve` | `check` — tests + web binary |
+| macOS desktop | ✅ `irgo build desktop` | `macos-desktop` |
+| Windows desktop | opt-in cross-compile (mingw-w64) | `windows-desktop` — native build **+ smoke run** |
+| Linux desktop | — (needs GTK/WebKit) | `linux-desktop` (ubuntu-22.04) |
+| iOS simulator | ✅ `irgo run ios` | `ios` — framework + simulator app |
 | iOS device | opt-in (needs signing) | `ios-device` — only when `IOS_TEAM_ID` set |
-| Android | opt-in (`env:setup:android` + `env:setup:emulator`) | `android` — AAR via SDK+NDK |
+| Android | ✅ `irgo run android` (self-provisions) | `android` — AAR; `android-emulator` — headless run on ARM64 |
 
 ## Notes
 
 - `irgo dev` (hot reload) shells out to `entr`, which is source-only C with no
-  binary releases — so it can't be installed via mise. `mise run serve` is the
+  binary releases — so it can't be installed via mise. `irgo serve` is the
   dependency-free alternative.
 - `gomobile`, `templ`, `air`, and `irgo` are Go tools installed via
-  `go install` (mise can't manage arbitrary Go binaries) — `mise run env:setup`
-  installs them.
+  `go install` (mise can't manage arbitrary Go binaries) — `mise run env:tools`
+  installs them, into `$(go env GOPATH)/bin`. Make sure that's on your `PATH`
+  so `irgo` is callable directly; CI does this in `.github/actions/setup`.
 - Linux desktop builds need GTK3 + WebKit2GTK and can't be cross-compiled from
   macOS — build on a Linux machine/CI or use a Docker image.
 - CI (`.github/workflows/build.yml`) builds **every target** on each push —

@@ -21,9 +21,12 @@ run = """
 # (IRGO_FORK_DIR), else clone the pinned fork tag so CI and fresh dev machines
 # get the same fixed CLI (the released v0.3.1 is broken for mobile).
 IRGO_FORK_DIR="${IRGO_FORK_DIR:-$HOME/workspace/go/src/github.com/joeblew999/irgo}"
-# Single source of truth for the fork version: the go.mod replace directive.
-# (Rarely override with IRGO_FORK_TAG for a different fork ref.)
-IRGO_FORK_TAG="${IRGO_FORK_TAG:-$(grep '^replace github.com/stukennedy/irgo' go.mod | awk '{print $NF}')}"
+# The fork version comes from IRGO_REPLACE in mise.toml — the same value
+# `irgo new` writes into myapp/go.mod, so the CLI and the generated app can
+# never disagree. Reading it back out of go.mod (as this used to) made the
+# generated file the source of truth for its own generator, which meant
+# regenerating myapp/ destroyed the pin.
+IRGO_FORK_TAG="${IRGO_FORK_TAG:-${IRGO_REPLACE##* }}"
 if ! command -v irgo >/dev/null 2>&1; then
   if [ -d "$IRGO_FORK_DIR" ]; then
     echo "Installing irgo from fork checkout ($IRGO_FORK_DIR)..."
@@ -342,14 +345,11 @@ dir = "{{config_root}}/myapp"
 run = "irgo build ios"
 
 ["build:ios:sim"]
-description = "Build iOS app for simulator, Debug config (framework + xcodebuild)"
+description = "Build the runnable iOS Simulator app (framework + .app)"
 dir = "{{config_root}}/myapp"
-run = """
-irgo build ios
-xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
-  -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath build/ios/DerivedData build
-"""
+# The CLI owns the whole flow now: scaffold ios/Example, build the framework,
+# clear any stale dev-server URL from Info.plist, then drive xcodebuild.
+run = "irgo build ios --sim"
 
 ["run:ios"]
 description = "Build + launch iOS app on Simulator (prod-style: embedded Go, no dev server)"
@@ -399,13 +399,10 @@ xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
 ["build:android"]
 description = "Build Android framework (gomobile bind → build/android/irgo.aar) — toolchain self-provisions on first build"
 dir = "{{config_root}}/myapp"
-run = """
-# _templ.go is gitignored but required by the mobile package — generate first.
-irgo templ
-# irgo build android self-provisions the toolchain (JDK/SDK/NDK/gomobile) and
-# pins -androidapi 21 (stukennedy/irgo#9).
-irgo build android
-"""
+# irgo build android self-provisions the toolchain (JDK/SDK/NDK/gomobile), runs
+# templ for the gitignored _templ.go the mobile package needs, and pins
+# -androidapi 21 (stukennedy/irgo#9). No preamble required here anymore.
+run = "irgo build android"
 
 ["build:mobile"]
 description = "Build all mobile frameworks (iOS + Android) — the `irgo build all` equivalent"

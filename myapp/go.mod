@@ -10,7 +10,7 @@ go 1.26.5
 // so this replace works transparently.
 require github.com/stukennedy/irgo v0.4.0
 
-replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.19
+replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.24
 
 require github.com/a-h/templ v0.3.977
 

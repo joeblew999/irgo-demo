@@ -11,6 +11,17 @@ go = "1.26.5"
 node = "lts"
 bun = "latest"
 
+# The single pin that keeps the CLI and this repo lined up. Both sides read it:
+#   - `irgo new myapp` writes it into myapp/go.mod as the replace directive
+#   - `env:tools` builds that exact CLI version
+# It lives here, not in myapp/go.mod, because myapp/ is CLI *output* — it is
+# regenerated wholesale by `irgo new`, which would destroy a pin kept inside it.
+#
+# The fork keeps the upstream module path (so the replace is transparent), which
+# is also why the CLI is built from a checkout rather than `go install`ed.
+[env]
+IRGO_REPLACE = "github.com/joeblew999/irgo v0.4.0-androidapi21.24"
+
 # All shell tasks are POSIX scripts — force bash on every OS. mise defaults to
 # `sh -c` on Unix but `cmd /c` on Windows, where our `#` comments/`for` loops
 # break ('#' is not recognized...). Bash ships on GitHub Windows runners

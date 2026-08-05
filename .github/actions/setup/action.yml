@@ -19,10 +19,15 @@ runs:
     - name: Generate templ + build CSS (build:assets)
       shell: bash
       run: mise run build:assets
-    - name: Scaffold mobile example apps (irgo new mobile)
-      # The ios/Example + android/Example native shells are NOT checked in —
-      # they come from the CLI's embedded templates (single source of truth,
-      # pinned by the go.mod replace). Idempotent: missing-only.
+    # env:tools `go install`s the irgo CLI into GOBIN (default $GOPATH/bin),
+    # which is not on a runner's PATH. Publish it so later steps can call
+    # `irgo` directly instead of routing every command through `mise run`.
+    - name: Put Go tool bin on PATH
       shell: bash
-      working-directory: myapp
-      run: irgo new mobile
+      run: |
+        BIN="$(go env GOBIN)"
+        [ -n "$BIN" ] || BIN="$(go env GOPATH)/bin"
+        echo "$BIN" >> "$GITHUB_PATH"
+    # No mobile-scaffold step: `irgo build`/`irgo run` scaffold ios/Example and
+    # android/Example from the CLI's embedded templates themselves (missing-only,
+    # idempotent). The `irgo new mobile` command that used to do it is gone.
