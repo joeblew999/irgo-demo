@@ -21,12 +21,9 @@ jobs:
     name: Web binary
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
       - name: Build web binary
         run: mise run build:web
       - name: Package
@@ -42,14 +39,11 @@ jobs:
     name: Linux desktop
     runs-on: ubuntu-22.04   # webkit2gtk-4.0 unavailable on 24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install OS packages + tools + generate templ + build CSS
-        run: |
-          mise run env:setup
-          mise run build:assets
+      - name: Install OS packages
+        run: mise run env:setup
       - name: Build Linux app
         run: mise run build:desktop:linux
       - name: Package
@@ -65,12 +59,9 @@ jobs:
     name: macOS desktop
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
       - name: Build macOS app
         run: mise run build:desktop
       - name: Package macOS app bundle
@@ -86,12 +77,9 @@ jobs:
     name: Windows desktop (native build + smoke test)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
       - name: Build Windows app (native)
         run: mise run build:desktop:windows
       - name: Smoke test (launch + assert alive)
@@ -128,12 +116,9 @@ jobs:
     name: iOS framework + simulator app
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
       - name: Build iOS framework + simulator app
         run: mise run build:ios:sim
       - name: Package
@@ -150,12 +135,9 @@ jobs:
     name: Android framework
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
       - name: Install Android SDK + NDK
         run: mise run env:setup:android
       - name: Build Android AAR

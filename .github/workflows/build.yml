@@ -1,17 +1,17 @@
-# Builds all targets: Go tests, Linux/macOS/Windows desktop, iOS, Android.
-# Windows is built natively on a real runner and smoke-tested — a
-# cross-compiled exe that is never run is worse than useless.
+# Builds every target on each push: Go tests + web, native Linux/macOS/Windows
+# desktop (Windows is smoke-run), iOS framework + simulator, Android AAR
+# (install → doctor → build → uninstall round-trip), and an Android emulator
+# run that proves the CLI's self-provisioning end to end.
 #
-# Tooling and gitignored-but-embedded artifacts are handled by mise tasks
-# (single source of truth, shared with local dev):
-#   - `mise run build:assets` installs pinned Go tools (depends env:tools)
-#     then generates templ + builds CSS
-#   - `mise run build:desktop:linux|all`, `build:ios:sim` do the builds
+# Every job starts from the shared `setup` composite action
+# (.github/actions/setup): checkout + mise + `mise run build:assets`
+# (gitignored templ/CSS are regenerated here).
 #
-# Gotchas handled by those tasks / this file:
-#   1. _templ.go + output.css are gitignored but required/embedded -> build:assets
-#   2. webview_go links webkit2gtk-4.0 -> use ubuntu-22.04 (not 24.04)
-#   3. iOS device/App Store builds need signing -> gated behind IOS_TEAM_ID secret
+# Gotchas:
+#   1. _templ.go + output.css are gitignored but embedded -> build:assets
+#   2. webview_go links webkit2gtk-4.0 -> ubuntu-22.04 (not 24.04)
+#   3. iOS device/App Store builds need signing -> gated on IOS_TEAM_ID
+#   4. never ship an exe that was never run -> Windows is smoke-tested
 
 name: build
 
@@ -27,15 +27,12 @@ concurrency:
 
 jobs:
   check:
-    name: Go tests
+    name: Check (tests + web)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
       - name: Run Go tests
         run: mise run check:test
       - name: Build web binary
@@ -46,61 +43,47 @@ jobs:
           path: myapp/build/myapp
           if-no-files-found: error
 
-  linux-desktop:
-    name: Linux desktop
-    runs-on: ubuntu-22.04
+  # Desktop — one matrix job, native build per OS. Linux needs OS packages
+  # (webkit2gtk); Windows is smoke-run after build (never ship a never-run exe).
+  desktop:
+    name: Desktop (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-22.04
+            needs_os_pkgs: true
+            task: build:desktop:linux
+            artifact: desktop-linux
+            path: myapp/build/desktop/linux/
+            smoke: false
+          - name: macOS
+            os: macos-latest
+            needs_os_pkgs: false
+            task: build:desktop
+            artifact: desktop-macos
+            path: myapp/build/desktop/macos/
+            smoke: false
+          - name: Windows
+            os: windows-latest
+            needs_os_pkgs: false
+            task: build:desktop:windows
+            artifact: desktop-windows-native
+            path: myapp/build/desktop/windows/
+            smoke: true
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install OS packages + tools + generate templ + build CSS
-        run: |
-          mise run env:setup
-          mise run build:assets
-      - name: Build Linux app
-        run: mise run build:desktop:linux
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-linux
-          path: myapp/build/desktop/linux/
-          if-no-files-found: error
-
-  macos-desktop:
-    name: macOS desktop
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
-      - name: Build macOS app
-        run: mise run build:desktop
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-macos
-          path: myapp/build/desktop/macos/
-          if-no-files-found: error
-
-  # Native Windows build + smoke test: launch, wait, assert the process is
-  # still alive (catches WebView2 init failures, missing DLLs, CGO linking,
-  # and static-dir resolution), then kill. This is the exe that ships — the
-  # old cross-compile path is gone, so every shipped exe has been run.
-  windows-desktop:
-    name: Windows desktop (native build + smoke run)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
-      - name: Build Windows app (native)
-        run: mise run build:desktop:windows
+      - name: Install OS packages
+        if: matrix.needs_os_pkgs
+        run: mise run env:setup
+      - name: Build desktop app
+        run: mise run ${{ matrix.task }}
       - name: Smoke test (launch + assert alive)
+        if: matrix.smoke
         shell: pwsh
         run: |
           $dir = "myapp\build\desktop\windows"
@@ -108,7 +91,6 @@ jobs:
           if (-not (Test-Path $exe)) { Write-Error "exe not found: $exe"; exit 1 }
           $out = Join-Path $dir "smoke.out.log"
           $err = Join-Path $dir "smoke.err.log"
-          Write-Host "Launching $exe ..."
           $p = Start-Process -FilePath $exe -WorkingDirectory $dir `
             -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
           Start-Sleep -Seconds 15
@@ -120,24 +102,19 @@ jobs:
           }
           Write-Host "Smoke test PASSED — myapp.exe still running (pid $($p.Id))"
           Stop-Process -Id $p.Id -Force
-          if (Test-Path $out) { Write-Host "--- stdout ---"; Get-Content $out }
-          if (Test-Path $err) { Write-Host "--- stderr ---"; Get-Content $err }
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-windows-native
-          path: myapp/build/desktop/windows/
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
           if-no-files-found: error
 
   ios:
     name: iOS framework + simulator
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
       - name: Build iOS framework + simulator app
         run: mise run build:ios:sim
       - uses: actions/upload-artifact@v4
@@ -152,12 +129,9 @@ jobs:
     name: Android framework (install → doctor → build → uninstall round-trip)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
       - name: Install Android toolchain (irgo install-tools android)
         run: mise run env:setup:android
       - name: Verify toolchain (irgo doctor android)
@@ -186,12 +160,9 @@ jobs:
     name: Android emulator (self-provision + headless run + smoke)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
       - name: Build, install + launch on headless emulator (CLI self-provisions)
         run: mise run run:android:headless
       - name: Verify toolchain (irgo doctor android)
@@ -238,12 +209,9 @@ jobs:
     needs: [ios, check-ios-signing]
     if: needs.check-ios-signing.outputs.has_ios_team == 'true'
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install tools + generate templ + build CSS
-        run: mise run build:assets
       # Signing: add a Distribution cert + provisioning profile to the runner
       # keychain (e.g. via apple-actions/import-codesign-certs) and set the
       # IOS_TEAM_ID secret. Without it this job is skipped.

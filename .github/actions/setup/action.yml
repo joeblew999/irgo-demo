@@ -1,0 +1,21 @@
+# Shared job preamble for the build/release workflows: checkout, provision the
+# mise toolchain (installs the irgo CLI + its tools), and regenerate the
+# gitignored-but-embedded assets (templ + Tailwind CSS) via `mise run build:assets`.
+#
+# Every job in .github/workflows/*.yml starts with this one step.
+name: setup
+description: Checkout + mise toolchain + generate build assets (templ + CSS)
+inputs:
+  github_token:
+    description: Token for jdx/mise-action
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+    - uses: jdx/mise-action@v4
+      with:
+        github_token: ${{ inputs.github_token }}
+    - name: Generate templ + build CSS (build:assets)
+      shell: bash
+      run: mise run build:assets
