@@ -2,17 +2,10 @@ module myapp
 
 go 1.26.5
 
-// Use the joeblew999/irgo fork: it carries the -androidapi fix for gomobile
-// bind (unreleased upstream, see stukennedy/irgo#9), the gradlew path fix,
-// stale-go.work regeneration (stukennedy/irgo#11), the CLI-scaffolded mobile
-// example apps, deterministic AVD home, store packaging (irgo package), and
-// review monitoring (irgo reviews). The fork keeps the original module path
-// so this replace works transparently.
-require github.com/stukennedy/irgo v0.4.0
-
-replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.24
-
-require github.com/a-h/templ v0.3.977
+require (
+	github.com/a-h/templ v0.3.977
+	github.com/stukennedy/irgo v0.4.0
+)
 
 require (
 	github.com/CAFxX/httpcompression v0.0.9 // indirect
@@ -24,3 +17,5 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
 )
+
+replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.25

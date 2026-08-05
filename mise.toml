@@ -20,7 +20,7 @@ bun = "latest"
 # The fork keeps the upstream module path (so the replace is transparent), which
 # is also why the CLI is built from a checkout rather than `go install`ed.
 [env]
-IRGO_REPLACE = "github.com/joeblew999/irgo v0.4.0-androidapi21.24"
+IRGO_REPLACE = "github.com/joeblew999/irgo v0.4.0-androidapi21.25"
 
 # Fetch the fork straight from GitHub: skip proxy.golang.org and sum.golang.org
 # for it. Those index a newly pushed tag on their own schedule (minutes to
