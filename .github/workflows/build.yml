@@ -169,16 +169,28 @@ jobs:
   # the APK, boots the headless emulator (KVM), installs and launches the app.
   android-emulator:
     name: Android emulator (self-provision + headless run + smoke)
-    # GitHub-hosted x64 runners have no KVM (x86_64 emulation hard-fails), so
-    # this runs on an ARM64 runner: the CLI installs the arm64-v8a system
-    # image and the emulator boots in software (TCG) mode with -accel off.
-    runs-on: ubuntu-24.04-arm
+    # x64, not ARM64: Google publishes no `emulator` package for linux-aarch64,
+    # so the ARM64 runner fails at "Failed to find package 'emulator'" before it
+    # can boot anything. x64 has the package, and the KVM step below gives it
+    # real hardware acceleration — so the x86_64 system image works and there is
+    # no need for the slow TCG fallback.
+    runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
-      # Software emulation boots slowly on shared runners.
       IRGO_BOOT_TIMEOUT_MIN: "15"
     steps:
       - uses: actions/checkout@v4
+      # /dev/kvm exists on x64 runners but the runner user is not in the kvm
+      # group, so the emulator dies at startup. This is what the CLI's hasKVM
+      # probe detects (it opens the device O_RDWR rather than stat-ing it).
+      # Widening the permissions turns hardware acceleration back on.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
