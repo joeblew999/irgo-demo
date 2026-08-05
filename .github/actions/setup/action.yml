@@ -19,3 +19,10 @@ runs:
     - name: Generate templ + build CSS (build:assets)
       shell: bash
       run: mise run build:assets
+    - name: Scaffold mobile example apps (irgo new mobile)
+      # The ios/Example + android/Example native shells are NOT checked in —
+      # they come from the CLI's embedded templates (single source of truth,
+      # pinned by the go.mod replace). Idempotent: missing-only.
+      shell: bash
+      working-directory: myapp
+      run: irgo new mobile

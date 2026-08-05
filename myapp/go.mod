@@ -8,7 +8,7 @@ go 1.26.5
 // original module path so this replace works transparently.
 require github.com/stukennedy/irgo v0.4.0
 
-replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.14
+replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.15
 
 require github.com/a-h/templ v0.3.977
 
