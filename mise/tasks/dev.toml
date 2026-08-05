@@ -135,17 +135,18 @@ esac
 """
 
 ["env:setup:android"]
-description = "Install Android SDK + NDK for Android builds (JDK + cmdline-tools + sdkmanager) — idempotent"
+description = "Install Android SDK + NDK for Android builds (JDK + cmdline-tools + sdkmanager) — idempotent, cross-platform"
 dir = "{{config_root}}/myapp"
 run = """
 set -e
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 
 # --- JDK 17 (needed by sdkmanager + gradle; the example's Gradle 8.2/AGP 8.2
-# doesn't run on JDK 21+). Detect a real JDK in order:
-#   1) existing JAVA_HOME, 2) macOS java_home (finds Temurin etc.), 3) brew
-#   openjdk@17 formula (installs without an admin password; the temurin cask
-#   needs one). macOS /usr/bin/java is a stub, so we test with java -version.
+# doesn't run on JDK 21+). Cross-platform detection in order:
+#   1) existing JAVA_HOME, 2) java on PATH, 3) macOS java_home (Temurin),
+#   4) brew openjdk@17 (macOS), 5) common install dirs on Linux/Windows.
+# If none is found we print platform-specific install instructions (auto
+# installing a JDK needs sudo/winget and is left to the developer).
 if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
   if [ -x /usr/libexec/java_home ] && JH="$(/usr/libexec/java_home -v 17 2>/dev/null)" && [ -n "$JH" ] && [ -x "$JH/bin/java" ]; then
     export JAVA_HOME="$JH"
@@ -155,45 +156,65 @@ if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
       brew install openjdk@17
     fi
     export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+  elif [ "$(uname -s)" = "Linux" ]; then
+    for d in /usr/lib/jvm/java-17-* /usr/lib/jvm/temurin-17* /usr/lib/jvm/msopenjdk-17*; do
+      [ -x "$d/bin/java" ] && export JAVA_HOME="$d" && break
+    done
   fi
 fi
 if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
   export PATH="$JAVA_HOME/bin:$PATH"
   echo "Using JDK: $JAVA_HOME"
 elif ! java -version >/dev/null 2>&1; then
-  echo "No JDK found — set JAVA_HOME to a JDK 17 (Temurin recommended) and retry." >&2
+  case "$(uname -s)" in
+    Darwin)  echo "No JDK 17 — run 'brew install openjdk@17' (or install Temurin)." >&2 ;;
+    Linux)   echo "No JDK 17 — run 'sudo apt install openjdk-17-jdk' (Debian/Ubuntu) or install Temurin." >&2 ;;
+    MINGW*|MSYS*|CYGWIN*) echo "No JDK 17 — run 'winget install EclipseAdoptium.Temurin.17.JDK' or set JAVA_HOME." >&2 ;;
+    *)       echo "No JDK 17 — install Temurin 17 and set JAVA_HOME." >&2 ;;
+  esac
   exit 1
 else
   echo "Using java from PATH (JAVA_HOME not set)."
 fi
 
-# --- Locate sdkmanager: prefer the SDK's own cmdline-tools, then the brew
-# cask path, then PATH.
+# --- cmdline-tools / sdkmanager (cross-platform). Install the official Google
+# zip into $ANDROID_HOME/cmdline-tools/latest when no sdkmanager exists — this
+# works on macOS/Linux/Windows without brew, and keeps cmdline-tools under
+# $ANDROID_HOME so avdmanager/sdkmanager resolve against the right SDK root.
+install_cmdline_tools() {
+  local os ver url tmp
+  case "$(uname -s)" in
+    Darwin) os="mac" ;;
+    Linux)  os="linux" ;;
+    MINGW*|MSYS*|CYGWIN*) os="win" ;;
+    *) echo "Unsupported OS for cmdline-tools download: $(uname -s)" >&2; return 1 ;;
+  esac
+  ver="${ANDROID_CMDLINE_TOOLS_VERSION:-11076708}"
+  url="https://dl.google.com/android/repository/commandlinetools-${os}-${ver}_latest.zip"
+  tmp="$(mktemp -d)"
+  echo "Downloading Android cmdline-tools ($os, r$ver) from $url ..."
+  curl -fsSL "$url" -o "$tmp/cmdtools.zip" || { echo "Download failed: $url" >&2; rm -rf "$tmp"; return 1; }
+  mkdir -p "$ANDROID_HOME/cmdline-tools"
+  unzip -q -o "$tmp/cmdtools.zip" -d "$tmp/extract" || { echo "unzip failed — install 'unzip' and retry" >&2; rm -rf "$tmp"; return 1; }
+  rm -rf "$ANDROID_HOME/cmdline-tools/latest"
+  mv "$tmp/extract/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+  rm -rf "$tmp"
+  echo "Installed cmdline-tools at $ANDROID_HOME/cmdline-tools/latest"
+}
+
 SDKM="$(command -v sdkmanager 2>/dev/null || true)"
 for p in "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
          /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager \
          /usr/local/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager; do
   [ -z "$SDKM" ] && [ -x "$p" ] && SDKM="$p"
 done
-
-case "$(uname -s)" in
-  Darwin)
-    if [ -z "$SDKM" ] && ! brew list --cask android-commandlinetools >/dev/null 2>&1; then
-      echo "Installing android-commandlinetools via brew..."
-      brew install --cask android-commandlinetools
-    fi
-    ;;
-  Linux|MINGW*|MSYS*|CYGWIN*)
-    echo "Note: ensure Android cmdline-tools are installed (or set ANDROID_HOME to an SDK that has them)." >&2
-    ;;
-esac
-
-# Re-locate after a possible install
-[ -z "$SDKM" ] && SDKM="$(command -v sdkmanager 2>/dev/null || true)"
-[ -z "$SDKM" ] && [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ] && SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-[ -z "$SDKM" ] && [ -x /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager ] && SDKM=/opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager
 if [ -z "$SDKM" ]; then
-  echo "sdkmanager not found — install Android cmdline-tools (macOS: brew install --cask android-commandlinetools) or set ANDROID_HOME." >&2
+  echo "sdkmanager not found — installing Android cmdline-tools into $ANDROID_HOME..."
+  install_cmdline_tools
+  [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ] && SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+fi
+if [ -z "$SDKM" ]; then
+  echo "Failed to locate sdkmanager. Install Android cmdline-tools manually or point ANDROID_HOME at an SDK that has them." >&2
   exit 1
 fi
 echo "Using sdkmanager: $SDKM"
@@ -240,13 +261,17 @@ if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
     export JAVA_HOME="$JH"
   elif [ "$(uname -s)" = "Darwin" ] && [ -d "$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home" ]; then
     export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+  elif [ "$(uname -s)" = "Linux" ]; then
+    for d in /usr/lib/jvm/java-17-* /usr/lib/jvm/temurin-17* /usr/lib/jvm/msopenjdk-17*; do
+      [ -x "$d/bin/java" ] && export JAVA_HOME="$d" && break
+    done
   fi
 fi
 if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
   export PATH="$JAVA_HOME/bin:$PATH"
 fi
 if ! java -version >/dev/null 2>&1; then
-  echo "No JDK found — run 'mise run env:setup:android' first or set JAVA_HOME." >&2
+  echo "No JDK 17 found — run 'mise run env:setup:android' first or set JAVA_HOME (see its error for platform install commands)." >&2
   exit 1
 fi
 
