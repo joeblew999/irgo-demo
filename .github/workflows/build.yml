@@ -149,7 +149,7 @@ jobs:
           if-no-files-found: error
 
   android:
-    name: Android framework
+    name: Android framework (install → doctor → build → uninstall round-trip)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -158,8 +158,10 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install tools + generate templ + build CSS
         run: mise run build:assets
-      - name: Install Android SDK + NDK
+      - name: Install Android toolchain (irgo install-tools android)
         run: mise run env:setup:android
+      - name: Verify toolchain (irgo doctor android)
+        run: mise run check:android
       - name: Build Android AAR
         run: mise run build:android
       - uses: actions/upload-artifact@v4
@@ -167,6 +169,14 @@ jobs:
           name: android-framework
           path: myapp/build/android/
           if-no-files-found: error
+      # Proves the CLI's uninstall is the exact inverse: toolchain must be gone.
+      - name: Round-trip — uninstall and verify removal
+        run: |
+          mise run env:uninstall:android
+          for p in "${ANDROID_HOME:-$HOME/Library/Android/sdk}" "$HOME/.irgo" "$HOME/.android" "$HOME/.gradle"; do
+            [ -e "$p" ] && { echo "::error::expected removed but exists: $p"; exit 1; }
+          done
+          echo "uninstall round-trip OK — machine clean"
 
   check-ios-signing:
     name: Detect iOS signing secrets

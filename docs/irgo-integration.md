@@ -45,8 +45,8 @@ Fork tags (newest last, all additive on top of upstream `main`):
 | 7 | ~~go.work "self-heal" block ×6~~ — **deleted**; the irgo CLI now validates/regenerates its own `go.work` | ~~6 tasks~~ (removed) | irgo wrote `go.work` → temp `x/mobile` clone; macOS cleans the temp dir; irgo never validated | resolved in fork CLI `v0.4.0-androidapi21.3` — [PR #11](https://github.com/stukennedy/irgo/pull/11), **draft until demo CI validates** |
 | 8 | Windows direct-toolchain build (absolute `GO`/`TEMPL`/`GCC`/`GXX`, `templ generate` directly) | `build:assets` + `build:desktop:windows` | git-bash on Windows strips the `Path` env var → native→native `exec.LookPath` fails | **PERMANENT** (environment limitation, not irgo) |
 | 9 | AVD `<build>` placeholder normalization (`sed` on `config.ini`) | `env:setup:emulator` | avdmanager quirk writing `<build>` placeholders | **PERMANENT** (tooling quirk) |
-| 10 | JDK 17 detection — **de-duplicated** into `mise/tasks/lib/common.sh` (`irgo_detect_jdk17`) | `env:setup:android`, `env:setup:emulator`, `run:android` | Gradle 8.2/AGP 8.2 won't run on JDK 21+; macOS `/usr/bin/java` is a stub | Not a workaround — a requirement. Now single-sourced |
-| 11 | sdkmanager/avdmanager location loop — **de-duplicated** into `mise/tasks/lib/common.sh` (`irgo_locate_sdk_tools`) | `env:setup:android`, `env:setup:emulator` | brew-cask shims point at the wrong SDK root → broken AVDs | Not a workaround. Now single-sourced |
+| 10 | JDK 17 — **moved into the irgo CLI**: `install-tools android` auto-downloads a managed Temurin 17 into `~/.irgo/jdks` (no brew/apt/winget); `build`/`run` resolve it automatically | `cmd/irgo/android_tools.go` (fork) | Gradle 8.2/AGP 8.2 won't run on JDK 21+; macOS `/usr/bin/java` is a stub | Not a workaround — a requirement. Now owned by the CLI (PR pending CI validation) |
+| 11 | sdkmanager/avdmanager location — **moved into the irgo CLI** (`install-tools android`) | `cmd/irgo/android_tools.go` (fork) | brew-cask shims point at the wrong SDK root → broken AVDs | Not a workaround. Now owned by the CLI |
 
 ## 3. Local vs CI boundary (what this machine does vs what CI proves)
 
