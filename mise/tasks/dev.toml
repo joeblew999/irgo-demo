@@ -40,7 +40,11 @@ IRGO_FORK_TAG="${IRGO_FORK_TAG:-${IRGO_REPLACE##* }}"
 # `command -v irgo` meant a machine that already had *any* irgo silently kept
 # it, so bumping IRGO_REPLACE upgraded nothing and builds ran against a stale
 # CLI while looking fine.
-STAMP="$HOME/.irgo/cli-tag"
+# Not under ~/.irgo: that directory is the CLI's own state, and `irgo
+# uninstall-tools` must be able to empty it completely. A maintainer stamp
+# living there kept it alive and made a fully-uninstalled machine look
+# provisioned.
+STAMP="${XDG_CACHE_HOME:-$HOME/.cache}/irgo-demo/cli-tag"
 INSTALLED="$(cat "$STAMP" 2>/dev/null || true)"
 if ! command -v irgo >/dev/null 2>&1 || [ "$INSTALLED" != "$IRGO_FORK_TAG" ]; then
   [ -n "$INSTALLED" ] && [ "$INSTALLED" != "$IRGO_FORK_TAG" ] \
