@@ -149,3 +149,20 @@ rm -rf "$TMP"
 description = "Fail if the pinned CLI and myapp/go.mod disagree"
 dir = "{{config_root}}/myapp"
 run = "irgo doctor --strict"
+
+["cli:local"]
+description = "Install the irgo CLI from your local fork checkout (iterate on CLI or template changes)"
+dir = "{{config_root}}"
+run = """
+set -e
+FORK="${IRGO_FORK_DIR:-$HOME/workspace/go/src/github.com/joeblew999/irgo}"
+[ -d "$FORK" ] || { echo "fork checkout not found at $FORK" >&2; exit 1; }
+(cd "$FORK" && go install ./cmd/irgo)
+echo "installed irgo from $FORK"
+"""
+
+["cli:iterate"]
+description = "Rebuild the CLI from your local checkout, then regenerate myapp/ from it"
+dir = "{{config_root}}"
+depends = ["cli:local"]
+run = "mise run cli:regen"

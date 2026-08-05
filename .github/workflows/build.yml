@@ -174,7 +174,10 @@ jobs:
       # Proves the CLI's uninstall is the exact inverse: toolchain must be gone.
       - name: Round-trip — uninstall and verify removal
         run: |
-          (cd myapp && irgo uninstall-tools android --remove-jdk)
+          cd myapp
+          irgo uninstall-tools android --remove-jdk
+          irgo uninstall-tools --all
+          cd ..
           for p in "${ANDROID_HOME:-$HOME/Library/Android/sdk}" "$HOME/.irgo" "$HOME/.android" "$HOME/.gradle"; do
             [ -e "$p" ] && { echo "::error::expected removed but exists: $p"; exit 1; }
           done

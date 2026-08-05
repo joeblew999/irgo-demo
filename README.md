@@ -99,6 +99,9 @@ Run these from `myapp/`:
 | `irgo doctor android` | Verify the Android toolchain in detail |
 | `irgo uninstall-tools android --remove-jdk` | Remove everything the CLI installed |
 | `irgo new myapp` | Regenerate the app from the CLI templates |
+| `irgo ci` | Scaffold GitHub Actions for every target |
+| `irgo clean [--all]` | Remove generated output |
+| `irgo uninstall [ios\|android\|desktop]` | Remove the installed app |
 
 ### mise is maintainer tooling — you do not need it
 
