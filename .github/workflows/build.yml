@@ -91,6 +91,11 @@ jobs:
   windows-desktop:
     name: Windows desktop (native build + smoke run)
     runs-on: windows-latest
+    # git-bash (MSYS) drops the Windows Path var, so native tools spawned by
+    # native tools (irgo -> go/templ/gcc) can't resolve executables. Inherit
+    # the Windows path so native children get a usable Path for LookPath.
+    env:
+      MSYS2_PATH_TYPE: inherit
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v4
