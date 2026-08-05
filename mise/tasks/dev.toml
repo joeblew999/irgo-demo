@@ -8,6 +8,16 @@
 # Windows devs: these run scripts are POSIX shell — use Git Bash or MSYS2
 # (not PowerShell/cmd).
 
+# Everything else is a plain `irgo` call — run it directly from myapp/ rather
+# than through a wrapper here:
+#   irgo serve | dev | templ | test
+#   irgo build ios [--sim] | android | all | desktop
+#   irgo run ios [--dev] | android [--no-window] | desktop [--dev]
+#   irgo install-tools android [--emulator] | doctor android
+#   irgo uninstall-tools android --remove-jdk
+# `irgo help` is the reference. Only tasks holding logic the CLI does not own
+# (OS packages, bun/CSS, desktop cross-compilation) still live below.
+
 ["env:tools"]
 description = "Install the irgo CLI (fork) + irgo install-tools (templ pinned to go.mod, air, gomobile) — idempotent"
 dir = "{{config_root}}/myapp"
@@ -147,52 +157,6 @@ case "$(uname -s)" in
 esac
 """
 
-["env:setup:android"]
-description = "Install Android SDK + NDK for Android builds (JDK + cmdline-tools + sdkmanager) — idempotent, cross-platform"
-dir = "{{config_root}}/myapp"
-run = """
-# The irgo CLI owns the Android toolchain (see `irgo help install-tools`):
-# cross-platform, downloads its own Temurin JDK 17 into ~/.irgo/jdks (no
-# brew/apt/winget), installs cmdline-tools/SDK/NDK into ANDROID_HOME, and
-# writes a marker so `irgo uninstall-tools android` removes exactly what it
-# installed. This task is a thin wrapper for discoverability / CI.
-irgo install-tools android
-"""
-
-["env:setup:emulator"]
-description = "Install Android emulator + system image + create AVD (local dev only, for run:android) — idempotent"
-dir = "{{config_root}}/myapp"
-run = """
-# Thin wrapper over the irgo CLI's emulator provisioning (--emulator).
-irgo install-tools android --emulator
-"""
-
-["env:uninstall:android"]
-description = "Remove everything env:setup:android/emulator installs + runtime residue — the exact inverse, self-contained"
-dir = "{{config_root}}/myapp"
-run = """
-# The irgo CLI removes what it installed: gomobile/gobind (GOBIN and
-# $GOPATH/bin), temp x/mobile clone + go.work, ~/.android, ~/.gradle, the SDK
-# dir (marker-guarded — never a dev's own SDK) and, with --remove-jdk, the
-# managed ~/.irgo/jdks JDK.
-irgo uninstall-tools android --remove-jdk
-"""
-
-["check:android"]
-description = "Verify the Android toolchain is correctly installed (irgo doctor android) — non-zero if anything critical is missing"
-dir = "{{config_root}}/myapp"
-run = "irgo doctor android"
-
-["serve:dev"]
-description = "Start irgo dev server (hot reload) — requires entr (brew install entr)"
-dir = "{{config_root}}/myapp"
-run = "irgo dev"
-
-["serve"]
-description = "Run web server without file watching (no entr needed — pure mise)"
-dir = "{{config_root}}/myapp"
-run = "irgo serve"
-
 ["css"]
 description = "Rebuild Tailwind CSS (input.css → output.css)"
 dir = "{{config_root}}/myapp"
@@ -202,11 +166,6 @@ run = "bun run css"
 description = "Watch Tailwind CSS sources"
 dir = "{{config_root}}/myapp"
 run = "bun run css:watch"
-
-["build:templ"]
-description = "Generate _templ.go from *.templ templates"
-dir = "{{config_root}}/myapp"
-run = "irgo templ"
 
 ["build:assets"]
 description = "Generate templ + build Tailwind CSS (both gitignored but embedded — run before any build)"
@@ -229,21 +188,6 @@ case "$(uname -s)" in
 esac
 bun run css
 """
-
-["check:test"]
-description = "Run Go tests"
-dir = "{{config_root}}/myapp"
-run = "go test ./..."
-
-["build:web"]
-description = "Build web server binary"
-dir = "{{config_root}}/myapp"
-run = "go build -o build/myapp ."
-
-["build:desktop"]
-description = "Build desktop app for the current platform (irgo auto-detects OS)"
-dir = "{{config_root}}/myapp"
-run = "irgo build desktop"
 
 ["build:desktop:windows"]
 description = "Build Windows desktop app (native on Windows; macOS cross-compiles via mingw-w64)"
@@ -339,50 +283,6 @@ case "$(uname -s)" in
 esac
 """
 
-["build:ios"]
-description = "Build iOS framework (gomobile bind → build/ios/Irgo.xcframework) — requires Xcode"
-dir = "{{config_root}}/myapp"
-run = "irgo build ios"
-
-["build:ios:sim"]
-description = "Build the runnable iOS Simulator app (framework + .app)"
-dir = "{{config_root}}/myapp"
-# The CLI owns the whole flow now: scaffold ios/Example, build the framework,
-# clear any stale dev-server URL from Info.plist, then drive xcodebuild.
-run = "irgo build ios --sim"
-
-["run:ios"]
-description = "Build + launch iOS app on Simulator (prod-style: embedded Go, no dev server)"
-dir = "{{config_root}}/myapp"
-run = "irgo run ios"
-
-["run:ios:dev"]
-description = "Build + launch iOS app on Simulator in DEV MODE (hot reload via air)"
-dir = "{{config_root}}/myapp"
-run = "irgo run ios --dev"
-
-["run:desktop"]
-description = "Build + launch desktop app (native webview, embedded Go)"
-dir = "{{config_root}}/myapp"
-run = """
-if ! command -v irgo >/dev/null 2>&1; then
-  echo "irgo not found — run 'mise run env:setup' first"
-  exit 1
-fi
-irgo run desktop
-"""
-
-["run:desktop:dev"]
-description = "Build + launch desktop app with devtools enabled (--dev)"
-dir = "{{config_root}}/myapp"
-run = """
-if ! command -v irgo >/dev/null 2>&1; then
-  echo "irgo not found — run 'mise run env:setup' first"
-  exit 1
-fi
-irgo run desktop --dev
-"""
-
 ["build:ios:prod"]
 description = "Build iOS app for device/App Store (Release) — requires Apple Developer signing"
 dir = "{{config_root}}/myapp"
@@ -395,32 +295,3 @@ xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
   -configuration Release -destination 'generic/platform=iOS' \
   -derivedDataPath build/ios/DerivedData-Release build
 """
-
-["build:android"]
-description = "Build Android framework (gomobile bind → build/android/irgo.aar) — toolchain self-provisions on first build"
-dir = "{{config_root}}/myapp"
-# irgo build android self-provisions the toolchain (JDK/SDK/NDK/gomobile), runs
-# templ for the gitignored _templ.go the mobile package needs, and pins
-# -androidapi 21 (stukennedy/irgo#9). No preamble required here anymore.
-run = "irgo build android"
-
-["build:mobile"]
-description = "Build all mobile frameworks (iOS + Android) — the `irgo build all` equivalent"
-dir = "{{config_root}}/myapp"
-depends = ["build:ios", "build:android"]
-run = "echo 'iOS + Android frameworks built'"
-
-["run:android"]
-description = "Build + launch Android app on the emulator, headed (irgo run android auto-boots the AVD)"
-dir = "{{config_root}}/myapp"
-run = """
-# The irgo CLI owns the whole flow: build AAR, gradle assembleDebug, boot the
-# emulator (headed by default), install, launch. Needs toolchain + AVD:
-#   mise run env:setup:android && mise run env:setup:emulator
-irgo run android
-"""
-
-["run:android:headless"]
-description = "Build + launch Android app on the emulator headless (no window — CI/scripting)"
-dir = "{{config_root}}/myapp"
-run = "irgo run android --no-window"

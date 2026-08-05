@@ -35,9 +35,11 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run Go tests
-        run: mise run check:test
+        working-directory: myapp
+        run: go test ./...
       - name: Build web binary
-        run: mise run build:web
+        working-directory: myapp
+        run: go build -o build/myapp .
       - uses: actions/upload-artifact@v4
         with:
           name: web
@@ -55,21 +57,21 @@ jobs:
           - name: Linux
             os: ubuntu-22.04
             needs_os_pkgs: true
-            task: build:desktop:linux
+            cmd: mise run build:desktop:linux
             artifact: desktop-linux
             path: myapp/build/desktop/linux/
             smoke: false
           - name: macOS
             os: macos-latest
             needs_os_pkgs: false
-            task: build:desktop
+            cmd: irgo build desktop
             artifact: desktop-macos
             path: myapp/build/desktop/macos/
             smoke: false
           - name: Windows
             os: windows-latest
             needs_os_pkgs: false
-            task: build:desktop:windows
+            cmd: mise run build:desktop:windows
             artifact: desktop-windows-native
             path: myapp/build/desktop/windows/
             smoke: true
@@ -83,7 +85,8 @@ jobs:
         if: matrix.needs_os_pkgs
         run: mise run env:setup
       - name: Build desktop app
-        run: mise run ${{ matrix.task }}
+        working-directory: myapp
+        run: ${{ matrix.cmd }}
       - name: Smoke test (launch + assert alive)
         if: matrix.smoke
         shell: pwsh
@@ -119,7 +122,8 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build iOS framework + simulator app
-        run: mise run build:ios:sim
+        working-directory: myapp
+        run: irgo build ios --sim
       - uses: actions/upload-artifact@v4
         with:
           name: ios-simulator
@@ -136,12 +140,15 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Android toolchain (irgo install-tools android)
-        run: mise run env:setup:android
-      - name: Verify toolchain (irgo doctor android)
-        run: mise run check:android
+      - name: Install Android toolchain
+        working-directory: myapp
+        run: irgo install-tools android
+      - name: Verify toolchain
+        working-directory: myapp
+        run: irgo doctor android
       - name: Build Android AAR
-        run: mise run build:android
+        working-directory: myapp
+        run: irgo build android
       - uses: actions/upload-artifact@v4
         with:
           name: android-framework
@@ -150,7 +157,7 @@ jobs:
       # Proves the CLI's uninstall is the exact inverse: toolchain must be gone.
       - name: Round-trip — uninstall and verify removal
         run: |
-          mise run env:uninstall:android
+          (cd myapp && irgo uninstall-tools android --remove-jdk)
           for p in "${ANDROID_HOME:-$HOME/Library/Android/sdk}" "$HOME/.irgo" "$HOME/.android" "$HOME/.gradle"; do
             [ -e "$p" ] && { echo "::error::expected removed but exists: $p"; exit 1; }
           done
@@ -176,9 +183,11 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build, install + launch on headless emulator (CLI self-provisions)
-        run: mise run run:android:headless
-      - name: Verify toolchain (irgo doctor android)
-        run: mise run check:android
+        working-directory: myapp
+        run: irgo run android --no-window
+      - name: Verify toolchain
+        working-directory: myapp
+        run: irgo doctor android
       - name: Smoke test — assert app process alive
         run: |
           ADB="$HOME/Android/Sdk/platform-tools/adb"

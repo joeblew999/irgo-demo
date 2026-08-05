@@ -19,15 +19,18 @@ runs:
     - name: Generate templ + build CSS (build:assets)
       shell: bash
       run: mise run build:assets
-    # env:tools `go install`s the irgo CLI into GOBIN (default $GOPATH/bin),
-    # which is not on a runner's PATH. Publish it so later steps can call
-    # `irgo` directly instead of routing every command through `mise run`.
-    - name: Put Go tool bin on PATH
+    # Hand mise's whole env to the job so steps can call `irgo`/`go` directly
+    # instead of routing everything through `mise run`. This carries GOPRIVATE
+    # (without it, direct steps resolve the fork via proxy.golang.org, which
+    # 404s until it indexes a freshly pushed tag) and GOBIN, where env:tools
+    # `go install`s the irgo CLI — not otherwise on a runner's PATH.
+    # PATH is excluded: GITHUB_PATH takes one directory per line, not a full
+    # PATH string, and GOBIN is the only entry that matters here.
+    - name: Export mise env to the job
       shell: bash
       run: |
-        BIN="$(go env GOBIN)"
-        [ -n "$BIN" ] || BIN="$(go env GOPATH)/bin"
-        echo "$BIN" >> "$GITHUB_PATH"
+        mise env --json | jq -r 'to_entries[] | select(.key != "PATH") | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+        mise env --json | jq -r '.GOBIN // empty' >> "$GITHUB_PATH"
     # No mobile-scaffold step: `irgo build`/`irgo run` scaffold ios/Example and
     # android/Example from the CLI's embedded templates themselves (missing-only,
     # idempotent). The `irgo new mobile` command that used to do it is gone.
