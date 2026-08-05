@@ -30,22 +30,23 @@ Fork tags (newest last, all additive on top of upstream `main`):
 - `v0.4.0-androidapi21` — `-androidapi 21` on the Android bind
 - `v0.4.0-androidapi21.1` — `./gradlew` cwd fix in `runAndroid`
 - `v0.4.0-androidapi21.2` — template fixes (local `Response` type, gradlew quotes, shipped `gradle-wrapper.jar`)
+- `v0.4.0-androidapi21.3` — stale `go.work` validation/regeneration ([PR #11](https://github.com/stukennedy/irgo/pull/11), draft)
 
 ## 2. Workaround inventory
 
 | # | Workaround | Where | Root cause | Delete when |
 |---|---|---|---|---|
 | 1 | `go.mod` `replace` → fork | `myapp/go.mod` | Android fixes unreleased upstream | PR #10 merges **and** a release includes it → bump `require`, drop `replace` |
-| 2 | `irgo build android \|\| true` + manual `gomobile bind -target android -androidapi 21` | `build:android` task | irgo's `buildAndroid` omits `-androidapi` (gomobile defaults to API 16, NDK r26/r27 reject) — [#9](https://github.com/stukennedy/irgo/issues/9) | PR #10 lands + CLI refreshed → replace with plain `irgo build android` |
+| 2 | ~~`irgo build android \|\| true` + manual bind~~ — now plain `irgo build android` (fork CLI pins `-androidapi 21`) | `build:android` task | irgo's `buildAndroid` omitted `-androidapi` (API-16 default, NDK r26/r27 reject) — [#9](https://github.com/stukennedy/irgo/issues/9) | resolved in fork CLI `v0.4.0-androidapi21.3`; becomes upstream when PR #10 lands
 | 3 | NDK r26 pin (`ANDROID_NDK_HOME` forced in task, overriding CI's NDK) | `env:setup:android` + `build:android` | same API-16 default: only r26 still accepts it; r27+ dropped it | same as #2 — keep r26 as the *chosen* version, drop the "must be r26" constraint |
 | 4 | Local `Response` type re-exported from `myapp/mobile/mobile.go` | `myapp/mobile/mobile.go` (+ fork template) | **golang.org/x/mobile** limitation: gobind silently drops types from dependency modules — not an irgo bug | **PERMANENT** — keep the local type; only the template source moves upstream |
-| 5 | irgo CLI installed from fork (`IRGO_FORK_DIR`) | `env:tools` | released CLI lacks the fixes | released irgo ≥ fixes → plain `go install github.com/stukennedy/irgo/cmd/irgo@<tag>`; `IRGO_FORK_DIR` becomes optional |
+| 5 | irgo CLI from fork — local checkout (`IRGO_FORK_DIR`) or clone of pinned `IRGO_FORK_TAG` (`v0.4.0-androidapi21.3`) so CI/fresh machines get the fixed CLI | `env:tools` | released CLI lacks the fixes | released irgo ≥ fixes → plain `go install github.com/stukennedy/irgo/cmd/irgo@<tag>`; fork vars become optional |
 | 6 | Demo's `android/Example/gradlew` (no literal quotes in `DEFAULT_JVM_OPTS`) + committed `gradle-wrapper.jar` | `myapp/android/Example/` | predates the fork template fix (PR #10) | re-scaffold `android/Example` from fixed templates once merged |
-| 7 | go.work "self-heal" block (identical ~20 lines) | **6 tasks**: `build:ios`, `build:ios:sim`, `run:ios`, `run:ios:dev`, `build:ios:prod`, `build:android` | irgo writes `go.work` → temp `x/mobile` clone; macOS cleans the temp dir; irgo never validates | **Phase 1 candidate**: file upstream issue, fix in fork so irgo handles its own `go.work` → delete all 6 blocks |
+| 7 | ~~go.work "self-heal" block ×6~~ — **deleted**; the irgo CLI now validates/regenerates its own `go.work` | ~~6 tasks~~ (removed) | irgo wrote `go.work` → temp `x/mobile` clone; macOS cleans the temp dir; irgo never validated | resolved in fork CLI `v0.4.0-androidapi21.3` — [PR #11](https://github.com/stukennedy/irgo/pull/11), **draft until demo CI validates** |
 | 8 | Windows direct-toolchain build (absolute `GO`/`TEMPL`/`GCC`/`GXX`, `templ generate` directly) | `build:assets` + `build:desktop:windows` | git-bash on Windows strips the `Path` env var → native→native `exec.LookPath` fails | **PERMANENT** (environment limitation, not irgo) |
 | 9 | AVD `<build>` placeholder normalization (`sed` on `config.ini`) | `env:setup:emulator` | avdmanager quirk writing `<build>` placeholders | **PERMANENT** (tooling quirk) |
-| 10 | JDK 17 detection (~15 lines ×3) | `env:setup:android`, `env:setup:emulator`, `run:android` | Gradle 8.2/AGP 8.2 won't run on JDK 21+; macOS `/usr/bin/java` is a stub | **Not a workaround — a requirement.** Just de-duplicate (Phase 1) |
-| 11 | sdkmanager/avdmanager location loop (~10 lines ×2) | `env:setup:android`, `env:setup:emulator` | brew-cask shims point at the wrong SDK root → broken AVDs | **Not a workaround.** De-duplicate (Phase 1) |
+| 10 | JDK 17 detection — **de-duplicated** into `mise/tasks/lib/common.sh` (`irgo_detect_jdk17`) | `env:setup:android`, `env:setup:emulator`, `run:android` | Gradle 8.2/AGP 8.2 won't run on JDK 21+; macOS `/usr/bin/java` is a stub | Not a workaround — a requirement. Now single-sourced |
+| 11 | sdkmanager/avdmanager location loop — **de-duplicated** into `mise/tasks/lib/common.sh` (`irgo_locate_sdk_tools`) | `env:setup:android`, `env:setup:emulator` | brew-cask shims point at the wrong SDK root → broken AVDs | Not a workaround. Now single-sourced |
 
 ## 3. Local vs CI boundary (what this machine does vs what CI proves)
 
@@ -60,11 +61,11 @@ run is worse than useless.
 ## 4. Upstream merge-day checklist (when PR #10 merges)
 
 1. Sync fork: `git fetch upstream && git rebase upstream/main && git push` (drop any now-merged commits).
-2. Install the released CLI — change `env:tools` to `go install github.com/stukennedy/irgo/cmd/irgo@<new-tag>` (keep `IRGO_FORK_DIR` as an optional override, not a default).
-3. Simplify `build:android`: replace `irgo build android || true` + manual `gomobile bind` with plain `irgo build android`.
+2. Install the released CLI — change `env:tools` to `go install github.com/stukennedy/irgo/cmd/irgo@<new-tag>` (keep `IRGO_FORK_DIR`/`IRGO_FORK_TAG` as optional overrides, not defaults).
+3. `build:android` is already plain `irgo build android` (fork CLI pins `-androidapi 21`) — just confirm it still holds.
 4. Revisit the NDK pin: keep r26 as the chosen version, but the hard constraint is gone (see #3).
 5. Re-scaffold `android/Example` from the fixed templates (kills workaround #6).
 6. `go.mod`: bump `require` to the released version, **delete the `replace`**.
 7. Run full CI; verify all green (including the Windows smoke run).
 8. Update this doc: resolve rows #1–#3, #5, #6; keep #4, #8, #9 as permanent.
-9. File the remaining upstream issues: go.work self-heal (#7) and the scaffolded-`output.css` follow-up noted in PR #10.
+9. Flip PR #11 from draft to ready once demo CI validates the go.work fix; then file any remaining upstream issues (e.g. the scaffolded-`output.css` follow-up noted in PR #10).

@@ -17,15 +17,27 @@ run = """
 #
 # irgo comes from the joeblew999/irgo fork (see go.mod `replace`). The fork
 # keeps the upstream module path, so `go install github.com/joeblew999/irgo/...`
-# would fail — build the CLI from a local checkout instead (set IRGO_FORK_DIR
-# to point at one), falling back to the released CLI otherwise.
+# would fail — build the CLI from a checkout instead: a local one when present
+# (IRGO_FORK_DIR), else clone the pinned fork tag so CI and fresh dev machines
+# get the same fixed CLI (the released v0.3.1 is broken for mobile).
 IRGO_FORK_DIR="${IRGO_FORK_DIR:-$HOME/workspace/go/src/github.com/joeblew999/irgo}"
+IRGO_FORK_TAG="${IRGO_FORK_TAG:-v0.4.0-androidapi21.3}"
 if ! command -v irgo >/dev/null 2>&1; then
   if [ -d "$IRGO_FORK_DIR" ]; then
-    echo "Installing irgo from fork ($IRGO_FORK_DIR)..."
+    echo "Installing irgo from fork checkout ($IRGO_FORK_DIR)..."
     (cd "$IRGO_FORK_DIR" && go install ./cmd/irgo) || go install github.com/stukennedy/irgo/cmd/irgo@v0.3.1
+  elif command -v git >/dev/null 2>&1; then
+    echo "irgo fork not found at $IRGO_FORK_DIR — cloning pinned tag $IRGO_FORK_TAG to build the CLI..."
+    tmp="$(mktemp -d)"
+    if git clone --quiet --depth 1 --branch "$IRGO_FORK_TAG" https://github.com/joeblew999/irgo "$tmp/irgo" && (cd "$tmp/irgo" && go install ./cmd/irgo); then
+      rm -rf "$tmp"
+    else
+      echo "  ! fork clone/build failed — falling back to released CLI (v0.3.1)" >&2
+      rm -rf "$tmp"
+      go install github.com/stukennedy/irgo/cmd/irgo@v0.3.1
+    fi
   else
-    echo "irgo fork not found at $IRGO_FORK_DIR — installing released CLI (v0.3.1). Set IRGO_FORK_DIR to use the fork." >&2
+    echo "irgo fork not found and git unavailable — installing released CLI (v0.3.1). Set IRGO_FORK_DIR to use the fork." >&2
     go install github.com/stukennedy/irgo/cmd/irgo@v0.3.1
   fi
 fi
@@ -139,33 +151,15 @@ description = "Install Android SDK + NDK for Android builds (JDK + cmdline-tools
 dir = "{{config_root}}/myapp"
 run = """
 set -e
+. "{{config_root}}/mise/tasks/lib/common.sh"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 
 # --- JDK 17 (needed by sdkmanager + gradle; the example's Gradle 8.2/AGP 8.2
-# doesn't run on JDK 21+). Cross-platform detection in order:
-#   1) existing JAVA_HOME, 2) java on PATH, 3) macOS java_home (Temurin),
-#   4) brew openjdk@17 (macOS), 5) common install dirs on Linux/Windows.
-# If none is found we print platform-specific install instructions (auto
-# installing a JDK needs sudo/winget and is left to the developer).
-if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
-  if [ -x /usr/libexec/java_home ] && JH="$(/usr/libexec/java_home -v 17 2>/dev/null)" && [ -n "$JH" ] && [ -x "$JH/bin/java" ]; then
-    export JAVA_HOME="$JH"
-  elif [ "$(uname -s)" = "Darwin" ]; then
-    if ! brew list --versions openjdk@17 >/dev/null 2>&1; then
-      echo "Installing openjdk@17 via brew (required by sdkmanager + gradle)..."
-      brew install openjdk@17
-    fi
-    export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
-  elif [ "$(uname -s)" = "Linux" ]; then
-    for d in /usr/lib/jvm/java-17-* /usr/lib/jvm/temurin-17* /usr/lib/jvm/msopenjdk-17*; do
-      [ -x "$d/bin/java" ] && export JAVA_HOME="$d" && break
-    done
-  fi
-fi
-if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
-  export PATH="$JAVA_HOME/bin:$PATH"
-  echo "Using JDK: $JAVA_HOME"
-elif ! java -version >/dev/null 2>&1; then
+# doesn't run on JDK 21+). Shared detection (existing JAVA_HOME, java on PATH,
+# macOS java_home/Temurin, brew openjdk@17 — installed here when missing on
+# macOS — Linux JVM dirs). If none is found we print platform-specific install
+# instructions (auto installing a JDK needs sudo/winget and is left to the dev).
+if ! irgo_detect_jdk17 1; then
   case "$(uname -s)" in
     Darwin)  echo "No JDK 17 — run 'brew install openjdk@17' (or install Temurin)." >&2 ;;
     Linux)   echo "No JDK 17 — run 'sudo apt install openjdk-17-jdk' (Debian/Ubuntu) or install Temurin." >&2 ;;
@@ -173,8 +167,9 @@ elif ! java -version >/dev/null 2>&1; then
     *)       echo "No JDK 17 — install Temurin 17 and set JAVA_HOME." >&2 ;;
   esac
   exit 1
-else
-  echo "Using java from PATH (JAVA_HOME not set)."
+fi
+if [ -n "$JAVA_HOME" ]; then
+  echo "Using JDK: $JAVA_HOME"
 fi
 
 # --- cmdline-tools / sdkmanager (cross-platform). Install the official Google
@@ -202,16 +197,11 @@ install_cmdline_tools() {
   echo "Installed cmdline-tools at $ANDROID_HOME/cmdline-tools/latest"
 }
 
-SDKM="$(command -v sdkmanager 2>/dev/null || true)"
-for p in "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-         /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager \
-         /usr/local/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager; do
-  [ -z "$SDKM" ] && [ -x "$p" ] && SDKM="$p"
-done
+irgo_locate_sdk_tools
 if [ -z "$SDKM" ]; then
   echo "sdkmanager not found — installing Android cmdline-tools into $ANDROID_HOME..."
   install_cmdline_tools
-  [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ] && SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+  irgo_locate_sdk_tools
 fi
 if [ -z "$SDKM" ]; then
   echo "Failed to locate sdkmanager. Install Android cmdline-tools manually or point ANDROID_HOME at an SDK that has them." >&2
@@ -251,26 +241,13 @@ description = "Install Android emulator + system image + create AVD (local dev o
 dir = "{{config_root}}/myapp"
 run = """
 set -e
+. "{{config_root}}/mise/tasks/lib/common.sh"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 
-# sdkmanager/avdmanager are Java tools: make sure a JDK is available (same
-# detection as env:setup:android — each task is its own process, so it does
-# not inherit the other task's JAVA_HOME).
-if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
-  if [ -x /usr/libexec/java_home ] && JH="$(/usr/libexec/java_home -v 17 2>/dev/null)" && [ -n "$JH" ] && [ -x "$JH/bin/java" ]; then
-    export JAVA_HOME="$JH"
-  elif [ "$(uname -s)" = "Darwin" ] && [ -d "$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home" ]; then
-    export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
-  elif [ "$(uname -s)" = "Linux" ]; then
-    for d in /usr/lib/jvm/java-17-* /usr/lib/jvm/temurin-17* /usr/lib/jvm/msopenjdk-17*; do
-      [ -x "$d/bin/java" ] && export JAVA_HOME="$d" && break
-    done
-  fi
-fi
-if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
-  export PATH="$JAVA_HOME/bin:$PATH"
-fi
-if ! java -version >/dev/null 2>&1; then
+# sdkmanager/avdmanager are Java tools: make sure a JDK is available (shared
+# detection — each task is its own process, so it does not inherit another
+# task's JAVA_HOME).
+if ! irgo_detect_jdk17; then
   echo "No JDK 17 found — run 'mise run env:setup:android' first or set JAVA_HOME (see its error for platform install commands)." >&2
   exit 1
 fi
@@ -278,14 +255,7 @@ fi
 # Locate tools: prefer the SDK's own cmdline-tools so the AVD is created
 # against the right SDK root (the brew `command -v` shims point at the cask's
 # own root and produce broken AVDs with <build> placeholders).
-SDKM="$(command -v sdkmanager 2>/dev/null || true)"
-AVDMGR="$(command -v avdmanager 2>/dev/null || true)"
-for p in "$ANDROID_HOME/cmdline-tools/latest/bin" \
-         /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin \
-         /usr/local/share/android-commandlinetools/cmdline-tools/latest/bin; do
-  [ -z "$SDKM" ] && [ -x "$p/sdkmanager" ] && SDKM="$p/sdkmanager"
-  [ -z "$AVDMGR" ] && [ -x "$p/avdmanager" ] && AVDMGR="$p/avdmanager"
-done
+irgo_locate_sdk_tools
 if [ -z "$SDKM" ] || [ -z "$AVDMGR" ]; then
   echo "sdkmanager/avdmanager not found — run 'mise run env:setup:android' first." >&2
   exit 1
@@ -565,29 +535,8 @@ if ! command -v gomobile >/dev/null 2>&1; then
   echo "gomobile not found — run 'mise run env:setup' first"
   exit 1
 fi
-# Self-heal stale go.work: it references a temp x/mobile clone that macOS may
-# have cleaned up. If so, remove it so irgo regenerates it (idempotent).
-if [ -f go.work ]; then
-  stale=0
-  in_use=0
-  while IFS= read -r line; do
-    case "$line" in
-      "use (") in_use=1 ;;
-      ")") in_use=0 ;;
-      "."|"") ;;
-      *)
-        if [ "$in_use" = "1" ]; then
-          p=$(printf '%s' "$line" | tr -d '[:space:]')
-          [ -d "$p" ] || { echo "go.work references missing dir: $p"; stale=1; }
-        fi
-        ;;
-    esac
-  done < go.work
-  if [ "$stale" = "1" ]; then
-    echo "Removing stale go.work (irgo regenerates it on next build)..."
-    rm -f go.work go.work.sum
-  fi
-fi
+# Stale go.work (temp x/mobile clone cleaned up by macOS) is handled by the
+# irgo CLI itself — no self-heal needed here.
 irgo build ios
 """
 
@@ -598,28 +547,6 @@ run = """
 if ! command -v gomobile >/dev/null 2>&1; then
   echo "gomobile not found — run 'mise run env:setup' first"
   exit 1
-fi
-# Self-heal stale go.work (see build:ios)
-if [ -f go.work ]; then
-  stale=0
-  in_use=0
-  while IFS= read -r line; do
-    case "$line" in
-      "use (") in_use=1 ;;
-      ")") in_use=0 ;;
-      "."|"") ;;
-      *)
-        if [ "$in_use" = "1" ]; then
-          p=$(printf '%s' "$line" | tr -d '[:space:]')
-          [ -d "$p" ] || { echo "go.work references missing dir: $p"; stale=1; }
-        fi
-        ;;
-    esac
-  done < go.work
-  if [ "$stale" = "1" ]; then
-    echo "Removing stale go.work (irgo regenerates it on next build)..."
-    rm -f go.work go.work.sum
-  fi
 fi
 irgo build ios
 xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
@@ -635,28 +562,6 @@ if ! command -v gomobile >/dev/null 2>&1; then
   echo "gomobile not found — run 'mise run env:setup' first"
   exit 1
 fi
-# Self-heal stale go.work (see build:ios)
-if [ -f go.work ]; then
-  stale=0
-  in_use=0
-  while IFS= read -r line; do
-    case "$line" in
-      "use (") in_use=1 ;;
-      ")") in_use=0 ;;
-      "."|"") ;;
-      *)
-        if [ "$in_use" = "1" ]; then
-          p=$(printf '%s' "$line" | tr -d '[:space:]')
-          [ -d "$p" ] || { echo "go.work references missing dir: $p"; stale=1; }
-        fi
-        ;;
-    esac
-  done < go.work
-  if [ "$stale" = "1" ]; then
-    echo "Removing stale go.work (irgo regenerates it on next build)..."
-    rm -f go.work go.work.sum
-  fi
-fi
 irgo run ios
 """
 
@@ -671,28 +576,6 @@ fi
 if ! command -v air >/dev/null 2>&1; then
   echo "air not found — run 'mise run env:setup' first"
   exit 1
-fi
-# Self-heal stale go.work (see build:ios)
-if [ -f go.work ]; then
-  stale=0
-  in_use=0
-  while IFS= read -r line; do
-    case "$line" in
-      "use (") in_use=1 ;;
-      ")") in_use=0 ;;
-      "."|"") ;;
-      *)
-        if [ "$in_use" = "1" ]; then
-          p=$(printf '%s' "$line" | tr -d '[:space:]')
-          [ -d "$p" ] || { echo "go.work references missing dir: $p"; stale=1; }
-        fi
-        ;;
-    esac
-  done < go.work
-  if [ "$stale" = "1" ]; then
-    echo "Removing stale go.work (irgo regenerates it on next build)..."
-    rm -f go.work go.work.sum
-  fi
 fi
 irgo run ios --dev
 """
@@ -727,28 +610,6 @@ if ! command -v gomobile >/dev/null 2>&1; then
   echo "gomobile not found — run 'mise run env:setup' first"
   exit 1
 fi
-# Self-heal stale go.work (see build:ios)
-if [ -f go.work ]; then
-  stale=0
-  in_use=0
-  while IFS= read -r line; do
-    case "$line" in
-      "use (") in_use=1 ;;
-      ")") in_use=0 ;;
-      "."|"") ;;
-      *)
-        if [ "$in_use" = "1" ]; then
-          p=$(printf '%s' "$line" | tr -d '[:space:]')
-          [ -d "$p" ] || { echo "go.work references missing dir: $p"; stale=1; }
-        fi
-        ;;
-    esac
-  done < go.work
-  if [ "$stale" = "1" ]; then
-    echo "Removing stale go.work (irgo regenerates it on next build)..."
-    rm -f go.work go.work.sum
-  fi
-fi
 irgo build ios
 # Release build for physical devices. Signing comes from the Xcode project or
 # pass a team via extra args, e.g.:
@@ -775,35 +636,10 @@ if [ ! -d "$ANDROID_NDK_HOME" ]; then
   echo "Android NDK not found at $ANDROID_NDK_HOME — run 'mise run env:setup:android' first" >&2
   exit 1
 fi
-# Self-heal stale go.work (see build:ios)
-if [ -f go.work ]; then
-  stale=0
-  in_use=0
-  while IFS= read -r line; do
-    case "$line" in
-      "use (") in_use=1 ;;
-      ")") in_use=0 ;;
-      "."|"") ;;
-      *)
-        if [ "$in_use" = "1" ]; then
-          p=$(printf '%s' "$line" | tr -d '[:space:]')
-          [ -d "$p" ] || { echo "go.work references missing dir: $p"; stale=1; }
-        fi
-        ;;
-    esac
-  done < go.work
-  if [ "$stale" = "1" ]; then
-    echo "Removing stale go.work (irgo regenerates it on next build)..."
-    rm -f go.work go.work.sum
-  fi
-fi
 irgo templ
-# irgo's mobile setup creates go.work + installs gomobile/gobind from source.
-# Its built-in bind defaults to API 16, which modern NDKs (r26/r27: 21..3x)
-# reject with "unsupported API version 16" — so we ignore that failure and run
-# the real bind ourselves with the API level the NDK actually supports.
-irgo build android || true
-gomobile bind -target android -androidapi 21 -o build/android/irgo.aar ./mobile
+# irgo's mobile setup creates go.work + installs gomobile/gobind from source,
+# and the fork CLI's bind already pins -androidapi 21 (stukennedy/irgo#9).
+irgo build android
 """
 
 ["build:mobile"]
@@ -827,24 +663,15 @@ if [ ! -f build/android/irgo.aar ]; then
   echo "build/android/irgo.aar missing — run 'mise run build:android' first" >&2
   exit 1
 fi
+. "{{config_root}}/mise/tasks/lib/common.sh"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 export PATH="$ANDROID_HOME/platform-tools:$PATH"
-# Gradle needs a real JDK 17 (macOS /usr/bin/java is a stub). Detect in order:
-#   1) an existing JAVA_HOME, 2) macOS java_home (finds any installed JDK 17,
-#      e.g. Temurin), 3) the brew openjdk@17 formula path.
-if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
-  if [ -x /usr/libexec/java_home ] && JH="$(/usr/libexec/java_home -v 17 2>/dev/null)" && [ -n "$JH" ] && [ -x "$JH/bin/java" ]; then
-    export JAVA_HOME="$JH"
-  elif BP="$(brew --prefix openjdk@17 2>/dev/null)" && [ -d "$BP/libexec/openjdk.jdk/Contents/Home" ]; then
-    export JAVA_HOME="$BP/libexec/openjdk.jdk/Contents/Home"
-  fi
-fi
-if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
+# Gradle needs a real JDK 17 (macOS /usr/bin/java is a stub) — shared detection.
+if ! irgo_detect_jdk17; then
   echo "No JDK 17 found — run 'mise run env:setup:android' first" >&2
   exit 1
 fi
-export PATH="$JAVA_HOME/bin:$PATH"
-echo "Using JDK: $JAVA_HOME"
+[ -n "$JAVA_HOME" ] && echo "Using JDK: $JAVA_HOME"
 # Boot the emulator if not already running
 if ! command -v adb >/dev/null 2>&1 || ! adb get-state >/dev/null 2>&1; then
   EMU="$ANDROID_HOME/emulator/emulator"

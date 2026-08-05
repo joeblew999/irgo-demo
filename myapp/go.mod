@@ -3,11 +3,12 @@ module myapp
 go 1.26.5
 
 // Use the joeblew999/irgo fork: it carries the -androidapi fix for gomobile
-// bind (unreleased upstream, see stukennedy/irgo#9) plus the gradlew path fix.
-// The fork keeps the original module path so this replace works transparently.
+// bind (unreleased upstream, see stukennedy/irgo#9), the gradlew path fix,
+// and stale-go.work regeneration (stukennedy/irgo#11). The fork keeps the
+// original module path so this replace works transparently.
 require github.com/stukennedy/irgo v0.4.0
 
-replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.2
+replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.3
 
 require github.com/a-h/templ v0.3.977
 
