@@ -316,6 +316,17 @@ irgo templ
 bun run css
 """
 
+["diag:env"]
+description = "Dump the environment a mise task actually sees (PATH/Path/tools) — used to debug Windows git-bash PATH issues"
+run = """
+echo "=== task PATH (POSIX) ==="; printf '%s\n' "$PATH" | tr ':' '\n' | head -12
+echo "=== task Path (Windows) ==="; printf '%s\n' "$Path" | tr ';' '\n' | head -12
+echo "=== cygpath -w -p result ==="; cygpath -w -p "$PATH" 2>&1 | head -c 300; echo
+echo "=== tools (command -v) ==="; for t in go templ irgo air gomobile; do printf '%-8s ' "$t"; command -v "$t" 2>/dev/null || echo "MISSING"; done
+echo "=== GOBIN ==="; echo "$GOBIN"; ls "$GOBIN" 2>/dev/null | head
+echo "=== type -a go ==="; type -a go 2>&1 | head -3
+"""
+
 ["check:test"]
 description = "Run Go tests"
 dir = "{{config_root}}/myapp"

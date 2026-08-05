@@ -107,6 +107,8 @@ jobs:
           echo "=== tools ==="; for t in go templ irgo air gomobile; do printf '%-8s ' "$t"; command -v "$t" 2>/dev/null || echo "MISSING"; done
           echo "=== PATH (first 8) ==="; printf '%s\n' "$PATH" | tr ':' '\n' | head -8
           echo "=== Windows Path ==="; printf '%s\n' "$Path" | tr ';' '\n' | head -8
+      - name: Diagnose mise task env
+        run: mise run diag:env
       - name: Build Windows app (native)
         run: mise run build:desktop:windows
       - name: Smoke test (launch + assert alive)
