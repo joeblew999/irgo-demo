@@ -11,10 +11,8 @@ go = "1.26.5"
 node = "lts"
 bun = "latest"
 
-# Deterministic Android env for local + CI (mise sets these for every task).
-# NDK r26 is pinned: gomobile defaults to API 16 and NDK r27+ dropped <21
-# ("unsupported API version 16"). Overriding ambient CIix env (which points at
-# the runner's preinstalled NDK r27) is what keeps builds identical.
-[env]
-ANDROID_HOME = "{{env.HOME}}/Library/Android/sdk"
-ANDROID_NDK_HOME = "{{env.HOME}}/Library/Android/sdk/ndk/26.3.11579264"
+# Android env vars are per-platform — see mise.macos.toml, mise.linux.toml,
+# mise.windows.toml. The SDK path and the home-dir env var differ by OS (HOME
+# on macOS/Linux, LOCALAPPDATA on Windows), and a template like {{env.HOME}}
+# fails to parse on Windows runners (no HOME there), breaking mise entirely.
+

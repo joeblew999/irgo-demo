@@ -1,0 +1,10 @@
+# Windows-specific mise config (merged with mise.toml).
+#
+# Android SDK under the Android Studio default (%LOCALAPPDATA%\Android\Sdk).
+# Note: Windows has no HOME env var (that's USERPROFILE/LOCALAPPDATA) — the
+# SDK path must use LOCALAPPDATA here or mise fails to parse the template.
+# NDK r26 pinned (see mise.macos.toml for why).
+
+[env]
+ANDROID_HOME = "{{env.LOCALAPPDATA}}/Android/Sdk"
+ANDROID_NDK_HOME = "{{env.LOCALAPPDATA}}/Android/Sdk/ndk/26.3.11579264"

@@ -1,0 +1,8 @@
+# Linux-specific mise config (merged with mise.toml).
+#
+# Android SDK under the Android Studio default (~/Android/Sdk). NDK r26 pinned
+# (see mise.macos.toml for why).
+
+[env]
+ANDROID_HOME = "{{env.HOME}}/Android/Sdk"
+ANDROID_NDK_HOME = "{{env.HOME}}/Android/Sdk/ndk/26.3.11579264"
