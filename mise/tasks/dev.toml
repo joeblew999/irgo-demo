@@ -305,6 +305,7 @@ description = "Generate templ + build Tailwind CSS (both gitignored but embedded
 depends = ["env:tools"]
 dir = "{{config_root}}/myapp"
 run = """
+set -e
 bun install
 # git-bash on Windows strips the Windows Path var, so native tools spawned by
 # native tools (irgo -> templ) fail. Bash CAN run native tools directly, so use
@@ -319,17 +320,6 @@ case "$(uname -s)" in
     ;;
 esac
 bun run css
-"""
-
-["diag:env"]
-description = "Dump the environment a mise task actually sees (PATH/Path/tools) — used to debug Windows git-bash PATH issues"
-run = """
-echo "=== task PATH (POSIX) ==="; printf '%s\n' "$PATH" | tr ':' '\n' | head -12
-echo "=== task Path (Windows) ==="; printf '%s\n' "$Path" | tr ';' '\n' | head -12
-echo "=== cygpath -w -p result ==="; cygpath -w -p "$PATH" 2>&1 | head -c 300; echo
-echo "=== tools (command -v) ==="; for t in go templ irgo air gomobile; do printf '%-8s ' "$t"; command -v "$t" 2>/dev/null || echo "MISSING"; done
-echo "=== GOBIN ==="; echo "$GOBIN"; ls "$GOBIN" 2>/dev/null | head
-echo "=== type -a go ==="; type -a go 2>&1 | head -3
 """
 
 ["check:test"]
@@ -370,6 +360,9 @@ esac
 description = "Build Windows desktop app (native on Windows; macOS cross-compiles via mingw-w64)"
 dir = "{{config_root}}/myapp"
 run = """
+# Fail loudly: mise does not always inject set -e, and a silent go build
+# failure previously let the task pass without producing an exe.
+set -e
 case "$(uname -s)" in
   Darwin)
     # macOS: brew provides the mingw-w64 cross-compiler.
@@ -383,16 +376,17 @@ case "$(uname -s)" in
     ;;
   MINGW*|MSYS*|CYGWIN*)
     # Windows native. git-bash strips the Windows Path var, so native tools
-    # spawned by native tools (irgo -> go/templ/gcc) fail exec.LookPath. Bash
+    # spawned by native tools (irgo -> go/templ/g++) fail exec.LookPath. Bash
     # itself CAN run native tools, so build directly with absolute paths and
-    # point CC at the absolute gcc to avoid any LookPath.
+    # point CC/CXX at the absolute gcc/g++ to avoid any LookPath.
     echo "Detected Windows — building natively (direct toolchain)"
     GO="$(command -v go)"
     TEMPL="$(command -v templ)"
     GCC="$(command -v gcc)"
+    GXX="$(command -v g++)"
     "$TEMPL" generate
     mkdir -p build/desktop/windows
-    CGO_ENABLED=1 CC="$GCC" "$GO" build -tags desktop -ldflags "-H windowsgui" \\
+    CGO_ENABLED=1 CC="$GCC" CXX="$GXX" "$GO" build -tags desktop -ldflags "-H windowsgui" \\
       -o build/desktop/windows/myapp.exe .
     if [ -d static ]; then
       rm -rf build/desktop/windows/static

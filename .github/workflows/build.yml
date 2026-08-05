@@ -91,11 +91,6 @@ jobs:
   windows-desktop:
     name: Windows desktop (native build + smoke run)
     runs-on: windows-latest
-    # git-bash (MSYS) drops the Windows Path var, so native tools spawned by
-    # native tools (irgo -> go/templ/gcc) can't resolve executables. Inherit
-    # the Windows path so native children get a usable Path for LookPath.
-    env:
-      MSYS2_PATH_TYPE: inherit
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v4
@@ -103,17 +98,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install tools + generate templ + build CSS
         run: mise run build:assets
-      - name: Diagnose toolchain (PATH / GOBIN / tools)
-        shell: bash
-        run: |
-          echo "=== go ==="; go version 2>&1 || echo "go MISSING at step level"
-          echo "=== go env ==="; go env GOBIN GOPATH 2>&1
-          echo "=== GOBIN contents ==="; ls "$(go env GOBIN)" 2>&1 | head -20
-          echo "=== tools ==="; for t in go templ irgo air gomobile; do printf '%-8s ' "$t"; command -v "$t" 2>/dev/null || echo "MISSING"; done
-          echo "=== PATH (first 8) ==="; printf '%s\n' "$PATH" | tr ':' '\n' | head -8
-          echo "=== Windows Path ==="; printf '%s\n' "$Path" | tr ';' '\n' | head -8
-      - name: Diagnose mise task env
-        run: mise run diag:env
       - name: Build Windows app (native)
         run: mise run build:desktop:windows
       - name: Smoke test (launch + assert alive)
