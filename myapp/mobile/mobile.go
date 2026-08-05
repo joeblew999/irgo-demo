@@ -75,3 +75,39 @@ func IsReady() bool {
 func Shutdown() {
 	irgomobile.Shutdown()
 }
+
+// WebSocketCallback is implemented by Swift/Kotlin to receive WebSocket messages.
+// Mirrors irgo/mobile.WebSocketCallback so gomobile can export it to Android/iOS.
+type WebSocketCallback interface {
+	// OnMessage is called when Go has a message to send to the WebView.
+	// data is a JSON-encoded websocket.Envelope.
+	OnMessage(sessionID string, data string)
+
+	// OnClose is called when a WebSocket session is closed.
+	OnClose(sessionID string, code int, reason string)
+
+	// OnError is called when an error occurs.
+	OnError(sessionID string, errorMsg string)
+}
+
+// SetWebSocketCallback registers the native callback handler for WebSocket messages.
+// Called from Swift/Kotlin during initialization.
+func SetWebSocketCallback(cb WebSocketCallback) {
+	irgomobile.SetWebSocketCallback(cb)
+}
+
+// WebSocketConnect creates a new WebSocket session and returns its session ID.
+// Called from the WebView when a WebSocket connection is requested.
+func WebSocketConnect(url string) (string, error) {
+	return irgomobile.WebSocketConnect(url)
+}
+
+// WebSocketSend sends a message through a virtual WebSocket session.
+func WebSocketSend(sessionID string, data string) (string, error) {
+	return irgomobile.WebSocketSend(sessionID, data)
+}
+
+// WebSocketClose closes a virtual WebSocket session.
+func WebSocketClose(sessionID string) error {
+	return irgomobile.WebSocketClose(sessionID)
+}

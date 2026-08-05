@@ -13,7 +13,7 @@ bun = "latest"
 
 # Deterministic Android env for local + CI (mise sets these for every task).
 # NDK r26 is pinned: gomobile defaults to API 16 and NDK r27+ dropped <21
-# ("unsupported API version 16"). Overriding ambient CI env (which points at
+# ("unsupported API version 16"). Overriding ambient CIix env (which points at
 # the runner's preinstalled NDK r27) is what keeps builds identical.
 [env]
 ANDROID_HOME = "{{env.HOME}}/Library/Android/sdk"

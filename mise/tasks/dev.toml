@@ -126,10 +126,20 @@ dir = "{{config_root}}/myapp"
 run = """
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 
-# JDK required by sdkmanager (present on CI runners; install on dev machines)
-if ! command -v java >/dev/null 2>&1 && [ "$(uname -s)" = "Darwin" ]; then
-  echo "Installing temurin JDK via brew (required by sdkmanager)..."
-  brew install --cask temurin
+# JDK required by sdkmanager + gradle. JDK 17 is pinned: the example's
+# Gradle 8.2 / AGP 8.2 toolchain doesn't run on JDK 21+.
+# Use the openjdk@17 FORMULA (not the temurin cask): the cask ships a .pkg
+# installer that requires an admin password; the formula installs without.
+# Note: macOS also ships a /usr/bin/java stub that `command -v java` finds
+# but which has no runtime, so we test with `java -version`.
+if ! java -version >/dev/null 2>&1 && [ "$(uname -s)" = "Darwin" ]; then
+  if ! brew list --versions openjdk@17 >/dev/null 2>&1; then
+    echo "Installing openjdk@17 via brew (required by sdkmanager + gradle)..."
+    brew install openjdk@17
+  fi
+  export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+  export PATH="$JAVA_HOME/bin:$PATH"
+  echo "JAVA_HOME=$JAVA_HOME"
 fi
 
 # Locate sdkmanager (brew cask path or PATH)
@@ -167,9 +177,12 @@ yes | "$SDKM" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
 echo "Installing Android SDK components (platform-tools, platform, build-tools, NDK)..."
 "$SDKM" --sdk_root="$ANDROID_HOME" \
   "platform-tools" \
+  "platforms;android-34" \
   "platforms;android-35" \
   "build-tools;35.0.0" \
   "ndk;26.3.11579264"
+# Note: android-34 is needed by the example app (compileSdk 34); android-35
+# is a fallback for gomobile bind's platform lookup.
 
 # Pin the NDK explicitly. NDK r26 is required: gomobile defaults to API 16
 # and NDK r27+ dropped support below API 21 ("unsupported API version 16").
@@ -182,14 +195,41 @@ else
 fi
 """
 
+["env:setup:emulator"]
+description = "Install Android emulator + system image + create AVD (local dev only, for run:android)"
+dir = "{{config_root}}/myapp"
+run = """
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+SDKM="$(command -v sdkmanager 2>/dev/null || true)"
+[ -z "$SDKM" ] && [ -x /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager ] && SDKM=/opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/sdkmanager
+if [ -z "$SDKM" ]; then
+  echo "sdkmanager not found — run 'mise run env:setup:android' first" >&2
+  exit 1
+fi
+
+# Install emulator + a system image (large download). Idempotent.
+echo "Installing Android emulator + system image (large download)..."
+"$SDKM" --sdk_root="$ANDROID_HOME" "emulator" "system-images;android-35;google_apis;arm64-v8a"
+
+# Create the AVD if missing
+AVDMGR="$(command -v avdmanager 2>/dev/null || true)"
+[ -z "$AVDMGR" ] && [ -x /opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/avdmanager ] && AVDMGR=/opt/homebrew/share/android-commandlinetools/cmdline-tools/latest/bin/avdmanager
+[ -z "$AVDMGR" ] && [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" ] && AVDMGR="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+if [ -n "$AVDMGR" ] && ! "$AVDMGR" list avd 2>/dev/null | grep -q "Name: irgo"; then
+  echo "Creating AVD 'irgo'..."
+  echo no | "$AVDMGR" create avd -n irgo -k "system-images;android-35;google_apis;arm64-v8a" --device "pixel_7" 2>/dev/null || true
+fi
+echo "Emulator ready — boot with: $ANDROID_HOME/emulator/emulator -avd irgo"
+"""
+
 ["env:uninstall:android"]
 description = "Remove everything env:setup:android installs (JDK, cmdline-tools, SDK)"
 dir = "{{config_root}}/myapp"
 run = """
 case "$(uname -s)" in
   Darwin)
-    echo "Removing temurin JDK (installed by env:setup:android)..."
-    brew uninstall --cask temurin 2>/dev/null || echo "  temurin not installed or already removed"
+    echo "Removing openjdk@17 JDK (installed by env:setup:android)..."
+    brew uninstall openjdk@17 2>/dev/null || echo "  openjdk@17 not installed or already removed"
     echo "Removing android-commandlinetools cask..."
     brew uninstall --cask android-commandlinetools 2>/dev/null || echo "  android-commandlinetools not installed or already removed"
     ;;
@@ -204,13 +244,19 @@ case "$(uname -s)" in
     ;;
 esac
 
+# Remove AVDs created by env:setup:emulator (stored outside the SDK)
+echo "Removing AVDs..."
+rm -rf "$HOME/.android/avd/irgo.avd" "$HOME/.android/avd/irgo.ini" 2>/dev/null || true
+
 # Remove the SDK directory only if it's the one we manage (default location).
 # Skip if ANDROID_HOME points somewhere custom — leave a dev's own SDK alone.
+# The SDK dir contains platform-tools (adb), platforms, build-tools, the NDK,
+# the emulator and system images — so this removes all of them at once.
 sdk="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 if [ -n "$ANDROID_HOME" ] && [ "$sdk" != "$HOME/Library/Android/sdk" ]; then
   echo "ANDROID_HOME is custom ($sdk) — leaving it in place. Remove manually if desired."
 else
-  echo "Removing SDK directory: $sdk"
+  echo "Removing SDK directory (SDK, NDK, emulator, system images): $sdk"
   rm -rf "$sdk"
 fi
 """
@@ -602,3 +648,70 @@ description = "Build all mobile frameworks (iOS + Android) — the `irgo build a
 dir = "{{config_root}}/myapp"
 depends = ["build:ios", "build:android"]
 run = "echo 'iOS + Android frameworks built'"
+
+["run:android"]
+description = "Build + launch Android app on emulator (needs android/Example + emulator)"
+dir = "{{config_root}}/myapp"
+# build:android produces build/android/irgo.aar (with the API-21 gomobile
+# workaround — irgo's built-in bind defaults to API 16 and fails on NDK r26).
+depends = ["build:android"]
+run = """
+if [ ! -d android/Example ]; then
+  echo "android/Example not found — copy it from the irgo repo (see README)" >&2
+  exit 1
+fi
+if [ ! -f build/android/irgo.aar ]; then
+  echo "build/android/irgo.aar missing — run 'mise run build:android' first" >&2
+  exit 1
+fi
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
+export PATH="$ANDROID_HOME/platform-tools:$PATH"
+# Gradle needs a real JDK 17 (macOS /usr/bin/java is a stub). Detect in order:
+#   1) an existing JAVA_HOME, 2) macOS java_home (finds any installed JDK 17,
+#      e.g. Temurin), 3) the brew openjdk@17 formula path.
+if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
+  if [ -x /usr/libexec/java_home ] && JH="$(/usr/libexec/java_home -v 17 2>/dev/null)" && [ -n "$JH" ] && [ -x "$JH/bin/java" ]; then
+    export JAVA_HOME="$JH"
+  elif BP="$(brew --prefix openjdk@17 2>/dev/null)" && [ -d "$BP/libexec/openjdk.jdk/Contents/Home" ]; then
+    export JAVA_HOME="$BP/libexec/openjdk.jdk/Contents/Home"
+  fi
+fi
+if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
+  echo "No JDK 17 found — run 'mise run env:setup:android' first" >&2
+  exit 1
+fi
+export PATH="$JAVA_HOME/bin:$PATH"
+echo "Using JDK: $JAVA_HOME"
+# Boot the emulator if not already running
+if ! command -v adb >/dev/null 2>&1 || ! adb get-state >/dev/null 2>&1; then
+  EMU="$ANDROID_HOME/emulator/emulator"
+  if [ ! -x "$EMU" ]; then
+    echo "emulator not installed — run 'mise run env:setup:emulator' first" >&2
+    exit 1
+  fi
+  echo "Booting emulator (AVD: irgo)..."
+  "$EMU" -avd irgo -no-snapshot -no-audio -no-boot-anim &
+  adb wait-for-device
+  until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '[:space:]')" = "1" ]; do
+    sleep 2
+  done
+fi
+# irgo's own `run android` stops here (its internal bind dies on API 16), so we
+# finish what it would do: wire the AAR into the Example project, gradle build,
+# install, and launch.
+echo "Copying AAR into android/Example/app/libs..."
+mkdir -p android/Example/app/libs
+cp build/android/irgo.aar android/Example/app/libs/irgo.aar
+echo "Building Android app (gradle assembleDebug)..."
+./android/Example/gradlew -p android/Example assembleDebug
+APK=android/Example/app/build/outputs/apk/debug/app-debug.apk
+if [ ! -f "$APK" ]; then
+  echo "built APK not found at $APK" >&2
+  exit 1
+fi
+echo "Installing on emulator..."
+adb install -r "$APK"
+echo "Launching app..."
+adb shell am start -n com.irgo.example/com.irgo.example.MainActivity
+echo "App running on Android!"
+"""

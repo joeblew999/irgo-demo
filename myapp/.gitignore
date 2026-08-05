@@ -3,6 +3,13 @@ bin/
 build/
 tmp/
 
+# Android example build outputs + machine-local SDK path
+android/Example/build/
+android/Example/.gradle/
+android/Example/app/build/
+android/Example/app/libs/irgo.aar
+android/Example/local.properties
+
 # Dependencies
 node_modules/
 vendor/
