@@ -25,13 +25,19 @@ native iOS, Android, desktop, and web apps from a single Go codebase
 ## First-time setup (new dev machine)
 
 ```bash
-mise install        # install pinned toolchain (go, node, bun)
-mise run env:setup  # install Go tools (irgo, templ, air, gomobile) + OS packages (entr, mingw-w64 via brew)
+mise install          # install pinned toolchain (go, node, bun)
+mise run env:tools    # install the irgo CLI (fork) + its tools (templ, air, gomobile)
+mise run env:setup    # OPTIONAL: OS packages (entr, mingw-w64) — only for hot reload / Windows cross-compile
 ```
 
-`env:setup` is idempotent — safe to re-run any time; it detects the platform and
-only installs what's missing. Everything it installs can be removed with
-`mise run env:uninstall`.
+**Android needs nothing to remember.** `irgo build android` / `irgo run android`
+self-provision the JDK 17, SDK, NDK (and emulator for `run`) on first use —
+managed under `~/.irgo` and `ANDROID_HOME`, no brew/apt/winget. Everything can
+be cleaned down with `irgo uninstall-tools android --remove-jdk` (or
+`mise run env:uninstall:android`), and `irgo doctor android` verifies the
+toolchain.
+
+`env:setup`/`env:tools` are idempotent — safe to re-run any time.
 
 ## Quickstart
 

@@ -178,12 +178,12 @@ jobs:
           done
           echo "uninstall round-trip OK — machine clean"
 
-  # RUNTIME proof for Android: build the APK, boot a HEADLESS emulator (KVM on
-  # Linux), install, launch, and assert the app process stays alive — the
-  # Android equivalent of the Windows smoke test. Uses the CLI's own flow end
-  # to end (install-tools android --emulator + run android --no-window).
+  # RUNTIME proof for Android — and proof of the CLI's self-provisioning: NO
+  # explicit toolchain/emulator install steps. On a bare runner, `irgo run
+  # android --no-window` installs the JDK/SDK/NDK/emulator/AVD itself, builds
+  # the APK, boots the headless emulator (KVM), installs and launches the app.
   android-emulator:
-    name: Android emulator (headless run + smoke)
+    name: Android emulator (self-provision + headless run + smoke)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -192,12 +192,10 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install tools + generate templ + build CSS
         run: mise run build:assets
-      - name: Install Android toolchain (irgo install-tools android)
-        run: mise run env:setup:android
-      - name: Install emulator + AVD (irgo install-tools android --emulator)
-        run: mise run env:setup:emulator
-      - name: Build, install + launch on headless emulator (irgo run android --no-window)
+      - name: Build, install + launch on headless emulator (CLI self-provisions)
         run: mise run run:android:headless
+      - name: Verify toolchain (irgo doctor android)
+        run: mise run check:android
       - name: Smoke test — assert app process alive
         run: |
           ADB="$HOME/Android/Sdk/platform-tools/adb"

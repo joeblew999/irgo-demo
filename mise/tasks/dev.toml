@@ -21,7 +21,7 @@ run = """
 # (IRGO_FORK_DIR), else clone the pinned fork tag so CI and fresh dev machines
 # get the same fixed CLI (the released v0.3.1 is broken for mobile).
 IRGO_FORK_DIR="${IRGO_FORK_DIR:-$HOME/workspace/go/src/github.com/joeblew999/irgo}"
-IRGO_FORK_TAG="${IRGO_FORK_TAG:-v0.4.0-androidapi21.10}"
+IRGO_FORK_TAG="${IRGO_FORK_TAG:-v0.4.0-androidapi21.11}"
 if ! command -v irgo >/dev/null 2>&1; then
   if [ -d "$IRGO_FORK_DIR" ]; then
     echo "Installing irgo from fork checkout ($IRGO_FORK_DIR)..."
@@ -236,28 +236,9 @@ dir = "{{config_root}}/myapp"
 run = "go build -o build/myapp ."
 
 ["build:desktop"]
-description = "Build desktop app for the current platform (auto-detects OS)"
+description = "Build desktop app for the current platform (irgo auto-detects OS)"
 dir = "{{config_root}}/myapp"
-run = """
-case "$(uname -s)" in
-  Darwin)
-    echo "Detected macOS — building macOS app"
-    irgo build desktop darwin
-    ;;
-  Linux)
-    echo "Detected Linux — building Linux app"
-    irgo build desktop linux
-    ;;
-  MINGW*|MSYS*|CYGWIN*)
-    echo "Detected Windows — building Windows app"
-    irgo build desktop windows
-    ;;
-  *)
-    echo "Unsupported platform: $(uname -s)" >&2
-    exit 1
-    ;;
-esac
-"""
+run = "irgo build desktop"
 
 ["build:desktop:windows"]
 description = "Build Windows desktop app (native on Windows; macOS cross-compiles via mingw-w64)"
@@ -356,24 +337,12 @@ esac
 ["build:ios"]
 description = "Build iOS framework (gomobile bind → build/ios/Irgo.xcframework) — requires Xcode"
 dir = "{{config_root}}/myapp"
-run = """
-if ! command -v gomobile >/dev/null 2>&1; then
-  echo "gomobile not found — run 'mise run env:setup' first"
-  exit 1
-fi
-# Stale go.work (temp x/mobile clone cleaned up by macOS) is handled by the
-# irgo CLI itself — no self-heal needed here.
-irgo build ios
-"""
+run = "irgo build ios"
 
 ["build:ios:sim"]
 description = "Build iOS app for simulator, Debug config (framework + xcodebuild)"
 dir = "{{config_root}}/myapp"
 run = """
-if ! command -v gomobile >/dev/null 2>&1; then
-  echo "gomobile not found — run 'mise run env:setup' first"
-  exit 1
-fi
 irgo build ios
 xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
   -destination 'generic/platform=iOS Simulator' \
@@ -383,28 +352,12 @@ xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
 ["run:ios"]
 description = "Build + launch iOS app on Simulator (prod-style: embedded Go, no dev server)"
 dir = "{{config_root}}/myapp"
-run = """
-if ! command -v gomobile >/dev/null 2>&1; then
-  echo "gomobile not found — run 'mise run env:setup' first"
-  exit 1
-fi
-irgo run ios
-"""
+run = "irgo run ios"
 
 ["run:ios:dev"]
 description = "Build + launch iOS app on Simulator in DEV MODE (hot reload via air)"
 dir = "{{config_root}}/myapp"
-run = """
-if ! command -v gomobile >/dev/null 2>&1; then
-  echo "gomobile not found — run 'mise run env:setup' first"
-  exit 1
-fi
-if ! command -v air >/dev/null 2>&1; then
-  echo "air not found — run 'mise run env:setup' first"
-  exit 1
-fi
-irgo run ios --dev
-"""
+run = "irgo run ios --dev"
 
 ["run:desktop"]
 description = "Build + launch desktop app (native webview, embedded Go)"
@@ -432,10 +385,6 @@ irgo run desktop --dev
 description = "Build iOS app for device/App Store (Release) — requires Apple Developer signing"
 dir = "{{config_root}}/myapp"
 run = """
-if ! command -v gomobile >/dev/null 2>&1; then
-  echo "gomobile not found — run 'mise run env:setup' first"
-  exit 1
-fi
 irgo build ios
 # Release build for physical devices. Signing comes from the Xcode project or
 # pass a team via extra args, e.g.:
@@ -446,25 +395,13 @@ xcodebuild -project ios/Example/Example.xcodeproj -scheme Example \
 """
 
 ["build:android"]
-description = "Build Android framework (gomobile bind → build/android/irgo.aar) — requires Android SDK + NDK"
+description = "Build Android framework (gomobile bind → build/android/irgo.aar) — toolchain self-provisions on first build"
 dir = "{{config_root}}/myapp"
 run = """
-if ! command -v gomobile >/dev/null 2>&1; then
-  echo "gomobile not found — run 'mise run env:setup' first"
-  exit 1
-fi
-export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-# Force our pinned NDK r26 (see env:setup:android). CI runners pre-set
-# ANDROID_NDK_HOME to their own NDK (e.g. r27) that gomobile rejects with
-# "unsupported API version 16" — so we override unconditionally, no default.
-export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/26.3.11579264"
-if [ ! -d "$ANDROID_NDK_HOME" ]; then
-  echo "Android NDK not found at $ANDROID_NDK_HOME — run 'mise run env:setup:android' first" >&2
-  exit 1
-fi
+# _templ.go is gitignored but required by the mobile package — generate first.
 irgo templ
-# irgo's mobile setup creates go.work + installs gomobile/gobind from source,
-# and the fork CLI's bind already pins -androidapi 21 (stukennedy/irgo#9).
+# irgo build android self-provisions the toolchain (JDK/SDK/NDK/gomobile) and
+# pins -androidapi 21 (stukennedy/irgo#9).
 irgo build android
 """
 
