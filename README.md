@@ -4,6 +4,8 @@ Test repo for [irgo](https://irgo.dev) — a hypermedia framework for building
 native iOS, Android, desktop, and web apps from a single Go codebase
 (Go + [templ](https://templ.guide/) + [Datastar](https://datastar.fyi)).
 
+[![CI](https://github.com/joeblew999/irgo-demo/actions/workflows/build.yml/badge.svg)](https://github.com/joeblew999/irgo-demo/actions/workflows/build.yml)
+
 ## Stack
 
 - **Go 1.26.5** + **node LTS** — managed via [mise](https://mise.jdx.dev) (OS-agnostic toolchain)
@@ -15,7 +17,9 @@ native iOS, Android, desktop, and web apps from a single Go codebase
   (`go`, `node`, `bun`) automatically
 - The [mise VS Code extension](https://marketplace.visualstudio.com/items?itemName=jdx.mise)
   (`jdx.mise`) — task runner + tool integration in the editor
-- **Xcode** (from the App Store, for iOS) / **Android Studio** (for Android)
+- **Xcode** (from the App Store) for iOS. **Android is opt-in** —
+  `mise run env:setup:android` installs the SDK/NDK (fully reversible with
+  `mise run env:uninstall:android`); CI builds Android without any local setup.
 - The rest is handled by `mise run env:setup` (see below)
 
 ## First-time setup (new dev machine)
@@ -63,7 +67,7 @@ Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (build
 | `mise run build:templ`   | Generate `_templ.go` from `*.templ`         |
 | `mise run build:assets`  | Generate templ + build CSS (run before any build) |
 | `mise run build:desktop` | Build desktop app for current platform (auto-detects OS) |
-| `mise run build:desktop:windows` | Build Windows exe (cross-compiles on macOS) |
+| `mise run build:desktop:windows` | Build Windows exe (native on Windows; cross-compiles on macOS) |
 | `mise run build:desktop:linux`   | Build Linux app (native Linux only)     |
 | `mise run build:desktop:all`     | Build every app the current OS supports |
 | `mise run build:ios`     | Build iOS framework (`Irgo.xcframework`, needs Xcode) |
@@ -86,6 +90,21 @@ Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (build
 | iOS      | gomobile, in-process Go (virtual HTTP)        | `mise run build:ios` |
 | Android  | gomobile, in-process Go (virtual HTTP)        | `mise run build:android` |
 
+**Where each target actually runs** — local machine vs CI is a deliberate
+split; Android/Windows tooling is heavy and is opt-in locally. See
+[docs/irgo-integration.md](docs/irgo-integration.md) for the full workaround
+inventory and the upstream tracking (stukennedy/irgo#9, PR #10).
+
+| Target | Locally on macOS | CI (per push) |
+|--------|:---:|---|
+| Web | ✅ `mise run serve` | `check` — tests + web binary |
+| macOS desktop | ✅ `mise run build:desktop` | `macos-desktop` |
+| Windows desktop | opt-in cross-compile | `windows-desktop` — native build **+ smoke run** |
+| Linux desktop | — | `linux-desktop` (ubuntu-22.04) |
+| iOS simulator | ✅ `mise run run:ios` | `ios` — framework + simulator app |
+| iOS device | opt-in (needs signing) | `ios-device` — only when `IOS_TEAM_ID` set |
+| Android | opt-in (`env:setup:android` + `env:setup:emulator`) | `android` — AAR via SDK+NDK |
+
 ## Notes
 
 - `irgo dev` (hot reload) shells out to `entr`, which is source-only C with no
@@ -97,12 +116,13 @@ Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (build
 - Linux desktop builds need GTK3 + WebKit2GTK and can't be cross-compiled from
   macOS — build on a Linux machine/CI or use a Docker image.
 - CI (`.github/workflows/build.yml`) builds **every target** on each push —
-  Go tests, web binary, Linux/macOS/Windows desktop, iOS framework + simulator,
-  and the Android AAR. Tag a release (`git tag v0.1.0 && git push origin v0.1.0`)
-  to trigger `.github/workflows/release.yml`, which attaches all artifacts to a
-  GitHub Release. The iOS device build runs only when signing secrets
-  (`IOS_TEAM_ID`) are configured. Note that `_templ.go` and `output.css` are
-  gitignored but embedded into builds, so CI regenerates them first.
+  see the matrix above. Tag a release
+  (`git tag v0.1.0 && git push origin v0.1.0`) to trigger
+  `.github/workflows/release.yml`, which attaches all artifacts to a GitHub
+  Release (Windows is now built **natively + smoke-tested** before it ships).
+  The iOS device build runs only when signing secrets (`IOS_TEAM_ID`) are
+  configured. Note that `_templ.go` and `output.css` are gitignored but
+  embedded into builds, so CI regenerates them first.
 - Keep the templ **generator** and templ **library** versions in sync
   (`go.mod`); otherwise generated code may reference APIs the library lacks.
 - App Store / Play Store distribution (signing, metadata, review) is outside
