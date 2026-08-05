@@ -21,7 +21,7 @@ run = """
 # (IRGO_FORK_DIR), else clone the pinned fork tag so CI and fresh dev machines
 # get the same fixed CLI (the released v0.3.1 is broken for mobile).
 IRGO_FORK_DIR="${IRGO_FORK_DIR:-$HOME/workspace/go/src/github.com/joeblew999/irgo}"
-IRGO_FORK_TAG="${IRGO_FORK_TAG:-v0.4.0-androidapi21.11}"
+IRGO_FORK_TAG="${IRGO_FORK_TAG:-v0.4.0-androidapi21.12}"
 if ! command -v irgo >/dev/null 2>&1; then
   if [ -d "$IRGO_FORK_DIR" ]; then
     echo "Installing irgo from fork checkout ($IRGO_FORK_DIR)..."
