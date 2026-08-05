@@ -13,6 +13,8 @@ native iOS, Android, desktop, and web apps from a single Go codebase
 
 - [mise](https://mise.jdx.dev/getting-started.html) — installs the pinned toolchain
   (`go`, `node`, `bun`) automatically
+- The [mise VS Code extension](https://marketplace.visualstudio.com/items?itemName=jdx.mise)
+  (`jdx.mise`) — task runner + tool integration in the editor
 - **Xcode** (from the App Store, for iOS) / **Android Studio** (for Android)
 - The rest is handled by `mise run env:setup` (see below)
 
@@ -78,8 +80,8 @@ Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (build
 |----------|-----------------------------------------------|--------------------|
 | Web      | Standard HTTP server                          | `mise run serve`   |
 | Desktop  | Real localhost server + native webview (CGO)  | `mise run build:desktop` |
-| iOS      | gomobile, in-process Go (virtual HTTP)        | `irgo build ios`   |
-| Android  | gomobile, in-process Go (virtual HTTP)        | `irgo build android` |
+| iOS      | gomobile, in-process Go (virtual HTTP)        | `mise run build:ios` |
+| Android  | gomobile, in-process Go (virtual HTTP)        | `mise run build:android` |
 
 ## Notes
 
@@ -91,8 +93,11 @@ Tasks are namespaced: `env:` (toolchain), `serve:` (web server), `build:` (build
   installs them.
 - Linux desktop builds need GTK3 + WebKit2GTK and can't be cross-compiled from
   macOS — build on a Linux machine/CI or use a Docker image.
-- CI (`.github/workflows/build.yml`) builds Linux/macOS/Windows desktop + iOS
-  simulator on every push; the iOS device build runs only when signing secrets
+- CI (`.github/workflows/build.yml`) builds **every target** on each push —
+  Go tests, web binary, Linux/macOS/Windows desktop, iOS framework + simulator,
+  and the Android AAR. Tag a release (`git tag v0.1.0 && git push origin v0.1.0`)
+  to trigger `.github/workflows/release.yml`, which attaches all artifacts to a
+  GitHub Release. The iOS device build runs only when signing secrets
   (`IOS_TEAM_ID`) are configured. Note that `_templ.go` and `output.css` are
   gitignored but embedded into builds, so CI regenerates them first.
 - Keep the templ **generator** and templ **library** versions in sync
