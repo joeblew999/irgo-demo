@@ -21,7 +21,7 @@ run = """
 # (IRGO_FORK_DIR), else clone the pinned fork tag so CI and fresh dev machines
 # get the same fixed CLI (the released v0.3.1 is broken for mobile).
 IRGO_FORK_DIR="${IRGO_FORK_DIR:-$HOME/workspace/go/src/github.com/joeblew999/irgo}"
-IRGO_FORK_TAG="${IRGO_FORK_TAG:-v0.4.0-androidapi21.4}"
+IRGO_FORK_TAG="${IRGO_FORK_TAG:-v0.4.0-androidapi21.8}"
 if ! command -v irgo >/dev/null 2>&1; then
   if [ -d "$IRGO_FORK_DIR" ]; then
     echo "Installing irgo from fork checkout ($IRGO_FORK_DIR)..."
@@ -479,59 +479,16 @@ depends = ["build:ios", "build:android"]
 run = "echo 'iOS + Android frameworks built'"
 
 ["run:android"]
-description = "Build + launch Android app on emulator (needs android/Example + emulator)"
+description = "Build + launch Android app on the emulator, headed (irgo run android auto-boots the AVD)"
 dir = "{{config_root}}/myapp"
-# build:android produces build/android/irgo.aar (with the API-21 gomobile
-# workaround — irgo's built-in bind defaults to API 16 and fails on NDK r26).
-depends = ["build:android"]
 run = """
-if [ ! -d android/Example ]; then
-  echo "android/Example not found — copy it from the irgo repo (see README)" >&2
-  exit 1
-fi
-if [ ! -f build/android/irgo.aar ]; then
-  echo "build/android/irgo.aar missing — run 'mise run build:android' first" >&2
-  exit 1
-fi
-. "{{config_root}}/mise/tasks/lib/common.sh"
-export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-export PATH="$ANDROID_HOME/platform-tools:$PATH"
-# Gradle needs a real JDK 17 (macOS /usr/bin/java is a stub) — shared detection.
-if ! irgo_detect_jdk17; then
-  echo "No JDK 17 found — run 'mise run env:setup:android' first" >&2
-  exit 1
-fi
-[ -n "$JAVA_HOME" ] && echo "Using JDK: $JAVA_HOME"
-# Boot the emulator if not already running
-if ! command -v adb >/dev/null 2>&1 || ! adb get-state >/dev/null 2>&1; then
-  EMU="$ANDROID_HOME/emulator/emulator"
-  if [ ! -x "$EMU" ]; then
-    echo "emulator not installed — run 'mise run env:setup:emulator' first" >&2
-    exit 1
-  fi
-  echo "Booting emulator (AVD: irgo)..."
-  "$EMU" -avd irgo -no-snapshot -no-audio -no-boot-anim &
-  adb wait-for-device
-  until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '[:space:]')" = "1" ]; do
-    sleep 2
-  done
-fi
-# irgo's own `run android` stops here (its internal bind dies on API 16), so we
-# finish what it would do: wire the AAR into the Example project, gradle build,
-# install, and launch.
-echo "Copying AAR into android/Example/app/libs..."
-mkdir -p android/Example/app/libs
-cp build/android/irgo.aar android/Example/app/libs/irgo.aar
-echo "Building Android app (gradle assembleDebug)..."
-./android/Example/gradlew -p android/Example assembleDebug
-APK=android/Example/app/build/outputs/apk/debug/app-debug.apk
-if [ ! -f "$APK" ]; then
-  echo "built APK not found at $APK" >&2
-  exit 1
-fi
-echo "Installing on emulator..."
-adb install -r "$APK"
-echo "Launching app..."
-adb shell am start -n com.irgo.example/com.irgo.example.MainActivity
-echo "App running on Android!"
+# The irgo CLI owns the whole flow: build AAR, gradle assembleDebug, boot the
+# emulator (headed by default), install, launch. Needs toolchain + AVD:
+#   mise run env:setup:android && mise run env:setup:emulator
+irgo run android
 """
+
+["run:android:headless"]
+description = "Build + launch Android app on the emulator headless (no window — CI/scripting)"
+dir = "{{config_root}}/myapp"
+run = "irgo run android --no-window"

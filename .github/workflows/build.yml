@@ -178,6 +178,51 @@ jobs:
           done
           echo "uninstall round-trip OK — machine clean"
 
+  # RUNTIME proof for Android: build the APK, boot a HEADLESS emulator (KVM on
+  # Linux), install, launch, and assert the app process stays alive — the
+  # Android equivalent of the Windows smoke test. Uses the CLI's own flow end
+  # to end (install-tools android --emulator + run android --no-window).
+  android-emulator:
+    name: Android emulator (headless run + smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install tools + generate templ + build CSS
+        run: mise run build:assets
+      - name: Install Android toolchain (irgo install-tools android)
+        run: mise run env:setup:android
+      - name: Install emulator + AVD (irgo install-tools android --emulator)
+        run: mise run env:setup:emulator
+      - name: Build, install + launch on headless emulator (irgo run android --no-window)
+        run: mise run run:android:headless
+      - name: Smoke test — assert app process alive
+        run: |
+          ADB="$HOME/Android/Sdk/platform-tools/adb"
+          PID=""
+          for i in $(seq 1 60); do
+            PID="$($ADB shell pidof com.irgo.example 2>/dev/null | tr -d ' \r')"
+            [ -n "$PID" ] && break
+            sleep 2
+          done
+          if [ -z "$PID" ]; then
+            echo "::error::app process not running on emulator"
+            $ADB shell dumpsys activity activities 2>/dev/null | grep -iE "mResumedActivity|irgo" | head -5 || true
+            exit 1
+          fi
+          echo "Smoke test PASSED — com.irgo.example running (pid $PID)"
+      - name: Capture screenshot
+        run: |
+          ADB="$HOME/Android/Sdk/platform-tools/adb"
+          $ADB exec-out screencap -p > android-smoke.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-emulator-smoke
+          path: android-smoke.png
+          if-no-files-found: error
+
   check-ios-signing:
     name: Detect iOS signing secrets
     runs-on: ubuntu-latest
