@@ -1,4 +1,6 @@
-# tasks/dev.toml — irgo-demo day-to-day commands.
+# mise/tasks/dev.toml — irgo-demo day-to-day commands.
+# mise auto-discovers .toml task files here (a default task dir), so no
+# `[task_config] includes` is needed in mise.toml.
 # All tasks run inside myapp/ where the project lives.
 #
 # Cross-platform: run `mise run env:setup` once per machine — it installs

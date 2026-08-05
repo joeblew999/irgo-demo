@@ -2,11 +2,9 @@
 # Go toolchain for this repo (irgo requires Go 1.21+)
 # node for Tailwind CLI + frontend tooling, bun for the CSS build
 #
+# Tasks live in mise/tasks/*.toml (a mise default task dir — auto-discovered).
 # Go-installed tools (irgo, templ, air, gomobile) and OS packages (entr,
 # mingw-w64, Xcode) are NOT managed by mise — run `mise run env:setup` once.
-
-[task_config]
-includes = ["tasks/dev.toml"]
 
 [tools]
 go = "1.26.5"
