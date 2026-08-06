@@ -21,7 +21,7 @@ concurrency:
 
 env:
   # Pin the CLI so CI and developers build with the same version.
-  IRGO_VERSION: "v0.4.0-androidapi21.56"
+  IRGO_VERSION: "v0.4.0-androidapi21.57"
   # Set when the project pins a fork. A fork keeps the upstream module path, so
   # `go install` cannot fetch it by repo — it has to be cloned and built.
   # Empty means the published module, which is the normal case.
