@@ -8,7 +8,7 @@ native iOS, Android, desktop, and web apps from a single Go codebase
 
 ## Stack
 
-- **Go 1.26.5** + **node LTS** — managed via [mise](https://mise.jdx.dev) (OS-agnostic toolchain)
+- **Go** (version from `go.mod`; Go fetches a matching toolchain itself) + **bun**/**npm** for Tailwind
 - **This repo is the generated app.** The root *is* `irgo new` output — never
   hand-edit it; change the CLI templates and regenerate with
   `go tool irgo`. CI enforces that: the `regen` job fails if regenerating
@@ -128,12 +128,11 @@ for everything the CLI does.
 ## Notes
 
 - `irgo dev` (hot reload) shells out to `entr`, which is source-only C with no
-  binary releases — so it can't be installed via mise. `irgo serve` is the
-  dependency-free alternative.
-- `gomobile`, `templ`, `air`, and `irgo` are Go tools installed via
-  `go install` (mise can't manage arbitrary Go binaries) — `go tool irgo`
-  installs them, into `$(go env GOPATH)/bin`. Make sure that's on your `PATH`
-  so `irgo` is callable directly; CI does this in `.github/actions/setup`.
+  binary releases, so `go tool irgo dev` installs it through your OS package
+  manager. `go tool irgo serve` is the dependency-free alternative.
+- `gomobile`, `templ` and `air` are installed on demand by the commands that
+  need them; `irgo` itself is never installed, since `go tool irgo` builds the
+  version `go.mod` requires.
 - Linux desktop builds need GTK3 + WebKit2GTK and can't be cross-compiled from
   macOS — build on a Linux machine/CI or use a Docker image.
 - CI (`.github/workflows/build.yml`) builds **every target** on each push —
