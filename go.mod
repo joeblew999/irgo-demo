@@ -14,10 +14,11 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/starfederation/datastar-go v1.1.0 // indirect
+	github.com/syumai/workers v0.33.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
 )
 
-replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.96
+replace github.com/stukennedy/irgo => /Users/apple/workspace/go/src/github.com/joeblew999/irgo
 
 tool github.com/stukennedy/irgo/cmd/irgo
