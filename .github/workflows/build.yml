@@ -21,7 +21,7 @@ concurrency:
 
 env:
   # Pin the CLI so CI and developers build with the same version.
-  IRGO_VERSION: "v0.4.0-androidapi21.52"
+  IRGO_VERSION: "v0.4.0-androidapi21.53"
   # Set when the project pins a fork. A fork keeps the upstream module path, so
   # `go install` cannot fetch it by repo — it has to be cloned and built.
   # Empty means the published module, which is the normal case.
@@ -51,11 +51,11 @@ jobs:
       # the binary. `irgo build` regenerates them; a plain `go build` needs this.
       - run: irgo assets
       - run: go test ./...
-      - run: go build -o build/myapp .
+      - run: go build -o build/irgo-demo .
       - uses: actions/upload-artifact@v4
         with:
           name: web
-          path: build/myapp
+          path: build/irgo-demo
           if-no-files-found: error
 
   desktop:

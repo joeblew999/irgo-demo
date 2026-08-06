@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 env:
-  IRGO_VERSION: "v0.4.0-androidapi21.52"
+  IRGO_VERSION: "v0.4.0-androidapi21.53"
 
 jobs:
   android:
