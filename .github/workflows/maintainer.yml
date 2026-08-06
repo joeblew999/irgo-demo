@@ -27,8 +27,8 @@ jobs:
     name: The app still matches `irgo new`
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       # This repo IS the CLI's output. If regenerating changes a tracked file,
@@ -49,8 +49,8 @@ jobs:
     name: Android toolchain round-trip (install → doctor → build → uninstall)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: go tool irgo install-tools android
