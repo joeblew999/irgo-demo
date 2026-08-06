@@ -1,154 +1,127 @@
 # irgo-demo
 
-Test repo for [irgo](https://irgo.dev) — a hypermedia framework for building
-native iOS, Android, desktop, and web apps from a single Go codebase
-(Go + [templ](https://templ.guide/) + [Datastar](https://datastar.fyi)).
+Built with **irgo** — one Go codebase for web, desktop, iOS and Android, using
+Go + [templ](https://templ.guide) + [Datastar](https://data-star.dev).
 
-[![CI](https://github.com/joeblew999/irgo-demo/actions/workflows/build.yml/badge.svg)](https://github.com/joeblew999/irgo-demo/actions/workflows/build.yml)
+> **This file is the single source of truth, for people and for AI assistants.**
+> There is no separate CLAUDE.md or AGENTS.md holding different instructions —
+> those exist only as pointers here, so anything reading the repo lands in the
+> same place. Keep it that way: two docs drift, and the one an agent happens to
+> read wins.
 
-## Stack
-
-- **Go** (version from `go.mod`; Go fetches a matching toolchain itself) + **bun**/**npm** for Tailwind
-- **This repo is the generated app.** The root *is* `irgo new` output — never
-  hand-edit it; change the CLI templates and regenerate with
-  `go tool irgo`. CI enforces that: the `regen` job fails if regenerating
-  changes a tracked file.
-- `.github/workflows/build.yml` and `release.yml` are **scaffolded by `irgo ci`
-  and committed unmodified** — they are what every irgo project gets, so this
-  repo proves they work on every push. Demo-only checks live in
-  `maintainer.yml`.
-
-## How the CLI and this repo stay lined up
-
-`go.mod` is the only pin, and it is the one every Go project already has:
-
-```
-require github.com/stukennedy/irgo v0.4.0
-tool    github.com/stukennedy/irgo/cmd/irgo
-replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.58
-```
-
-`go tool irgo` builds exactly that version — through the `replace`, so this repo
-tracks a fork without anything being installed, put on `PATH`, or kept in step
-by hand. Move the pin with `go mod edit -replace`, and CI, your shell and the
-generated app all follow together.
-
-There is no mise, no bootstrap script and no setup step.
-
-## Prerequisites
-
-- **Go** (the version in `go.mod`; Go downloads a matching toolchain itself)
-- **bun** or **npm**, for the Tailwind build
-- **Xcode** (App Store) only if you want iOS
-
-Everything else installs itself on first use — see below.
-
-## Getting started
+## Quickstart
 
 ```bash
-go tool irgo doctor    # what can this machine build?
-go tool irgo dev       # hot-reload server on :8080
+go tool irgo doctor      # what this machine can build, and what needs setup
+go tool irgo dev         # hot-reload server on http://localhost:8080
 ```
 
-Because this repo tracks a fork whose module path the public proxy cannot
-serve, set `GOPRIVATE` once:
+`go tool irgo` builds the CLI version this module requires, straight from
+go.mod — nothing to install, nothing to keep on PATH, nothing to keep in step.
+The `tool` directive in go.mod is the only pin.
 
-```bash
-export GOPRIVATE='github.com/joeblew999/*'
+## Architecture
+
+```
+User Interaction → Datastar Request → Go Handler → Templ Template → SSE Response → DOM Update
 ```
 
-A project on a published release needs neither that nor the `replace`.
+**Key principle:** the server returns HTML fragments over SSE, not JSON.
+Datastar applies them to the DOM. There is no client-side state to keep in
+sync, and no API layer to write twice.
 
-**Nothing else to remember, and no ordering to get right.** The CLI provisions
-what a command needs, when that command needs it:
+## Project Structure
 
-- `go tool irgo build android` installs JDK 17, SDK, NDK (and the emulator +
-  AVD for `run`) under `~/.irgo` and `ANDROID_HOME` — no brew/apt/winget,
-  and no Android Studio. Clean down with
-  `go tool irgo uninstall-tools android --remove-jdk`.
-- Builds regenerate `_templ.go` and the stylesheet themselves — both are
-  gitignored but embedded.
-- `build`/`run` scaffold `ios/Example` and `android/Example` from the CLI's
-  templates. They are not checked in.
-- iOS targets refuse to run off macOS with a clear error; `build all` skips
-  what the host cannot do.
+```
+├── main.go              # Web/mobile entry (//go:build !desktop)
+├── main_desktop.go      # Desktop entry (//go:build desktop)
+├── app/app.go           # Router setup and route definitions
+├── handlers/            # HTTP handlers returning HTML or SSE
+├── templates/           # .templ layouts, pages and components
+├── static/
+│   ├── css/input.css    # Tailwind source (yours)
+│   └── css/output.css   # generated — do not edit
+├── mobile/mobile.go     # gomobile bridge (framework-owned)
+├── ios/Example/         # native iOS shell — generated, not committed
+├── android/Example/     # native Android shell — generated, not committed
+├── irgo.package.toml    # store/signing settings (yours; secrets go in
+│                        #   irgo.package.local.toml, which is gitignored)
+├── .air.toml            # hot-reload config (framework-owned)
+└── .github/workflows/   # CI for every target (framework-owned)
+```
+
+Anything marked generated is rebuilt on demand and gitignored. `_templ.go` and
+`static/css/output.css` are generated **but embedded into builds**, so every
+build regenerates them — you never have to remember.
 
 ## Commands
 
-`go tool irgo help` is the reference. `irgo doctor` reports what this host can
-build and what needs a manual step.
+Everything runs through `go tool irgo`. `go tool irgo help <command>` has the
+detail; `doctor` reports what your machine can actually do.
 
 | Command | Description |
 |---|---|
-| `go tool irgo doctor [--fix]` | What this host can build; `--fix` repairs the Xcode setup |
-| `go tool irgo dev` / `serve` | Web server; `dev` adds hot reload |
-| `go tool irgo build ios --sim` | Runnable iOS Simulator app |
-| `go tool irgo run ios --device` | Build, install and launch on a USB iPhone |
-| `go tool irgo build android` | Android AAR — self-provisions the toolchain |
-| `go tool irgo build desktop all` | Every desktop app this host supports |
-| `go tool irgo upgrade` | Refresh framework files, leaving your code alone |
-| `go tool irgo ci` | Scaffold the GitHub Actions workflows |
-| `go tool irgo clean [--all]` | Remove generated output |
-| `go tool irgo uninstall [ios\|android\|desktop]` | Remove the installed app |
-| `go tool irgo package setup --check` | What each store needs, and how to supply it |
+| `doctor [--fix]` | What this host can build; `--fix` repairs the Xcode setup |
+| `dev` / `serve` | Web server; `dev` adds hot reload |
+| `assets` | Regenerate templ + Tailwind (builds do this already) |
+| `build ios [--sim\|--device]` | Framework, Simulator app, or signed device build |
+| `build android` | AAR — installs the JDK/SDK/NDK on first use |
+| `build desktop [all]` | Desktop app; `all` = every target this host supports |
+| `run ios [--dev\|--device]` | Launch on Simulator or a USB iPhone |
+| `run android [--no-window]` | Launch on the emulator |
+| `run desktop [--dev\|--built]` | Native window; `--built` runs the built app |
+| `package <ios\|android\|macos\|windows>` | Store artifacts |
+| `package setup --check` | What each store needs and how to supply it |
+| `ios team [ID]` | List signing teams, or select one |
+| `pin [target]` | Which irgo this builds against — release, fork, or a checkout |
+| `upgrade [--diff\|--force]` | Take framework updates without touching your code |
+| `ci [--force]` | Scaffold the GitHub Actions workflows |
+| `clean [--all]` | Remove generated output |
+| `uninstall [ios\|android\|desktop]` | Remove the installed app |
 
-### This repo is generated output
+**Nothing needs installing first.** Toolchains provision themselves when a
+command needs them: `build android` fetches JDK 17, the SDK and the NDK into
+`~/.irgo` — Android Studio is not involved. Undo it all with
+`uninstall-tools android --remove-jdk`. The one exception is Xcode, which only
+Apple can install; `doctor` says so plainly.
 
-The root **is** `irgo new` output. Never hand-edit it — change the CLI
-templates and regenerate. CI enforces that: the `regen` job fails if
-regenerating changes a tracked file.
+## Working on irgo itself
 
-`.github/workflows/build.yml` and `release.yml` are scaffolded by `irgo ci` and
-committed **unmodified**, so every push exercises what a developer actually
-gets. Demo-only checks live in `maintainer.yml`.
+There is no separate setup for contributors, and no second toolchain. Using
+irgo and working on irgo are the same activity pointed at different versions:
 
-## Platform targets
+```bash
+go tool irgo pin                      # what am I building against?
+go tool irgo pin --local ../irgo      # build a checkout you are editing
+# edit the CLI — the next `go tool irgo` already runs your change
+go tool irgo pin --release            # back to the published build
+```
 
-| Platform | How it runs                                   | Command            |
-|----------|-----------------------------------------------|--------------------|
-| Web      | Standard HTTP server                          | `go tool irgo serve` |
-| Desktop  | Real localhost server + native webview (CGO)  | `irgo build desktop` |
-| iOS      | gomobile, in-process Go (virtual HTTP)        | `irgo build ios`   |
-| Android  | gomobile, in-process Go (virtual HTTP)        | `irgo build android` |
+`--local` writes a `replace` into go.mod, so nothing is installed, nothing is
+tagged, and nothing has to be reinstalled between edits. The same command
+tracks a fork:
 
-**Where each target actually runs.** Android no longer needs an opt-in local
-setup step — the CLI provisions it on first build. `irgo help` is the reference
-for everything the CLI does.
+```bash
+go tool irgo pin joeblew999/irgo@v0.4.0-androidapi21.65
+go env -w GOPRIVATE='github.com/joeblew999/*'   # forks bypass the proxy, once
+```
 
-| Target | Locally on macOS | CI (per push) |
-|--------|:---:|---|
-| Web | ✅ `irgo serve` | `check` — tests + web binary |
-| macOS desktop | ✅ `irgo build desktop` | `macos-desktop` |
-| Windows desktop | opt-in cross-compile (mingw-w64) | `windows-desktop` — native build **+ smoke run** |
-| Linux desktop | — (needs GTK/WebKit) | `linux-desktop` (ubuntu-22.04) |
-| iOS simulator | ✅ `irgo run ios` | `ios` — framework + simulator app |
-| iOS device | opt-in (needs signing) | `ios-device` — only when `IOS_TEAM_ID` set |
-| Android | ✅ `irgo run android` (self-provisions) | `android` — AAR only (no emulator: slow and fragile in CI) |
+A fork keeps the upstream module path — that is what makes its `replace`
+transparent, and also why Go fetches it from GitHub rather than the proxy.
 
-## Notes
+## Updating the framework
 
-- `irgo dev` (hot reload) shells out to `entr`, which is source-only C with no
-  binary releases, so `go tool irgo dev` installs it through your OS package
-  manager. `go tool irgo serve` is the dependency-free alternative.
-- `gomobile`, `templ` and `air` are installed on demand by the commands that
-  need them; `irgo` itself is never installed, since `go tool irgo` builds the
-  version `go.mod` requires.
-- Linux desktop builds need GTK3 + WebKit2GTK and can't be cross-compiled from
-  macOS — build on a Linux machine/CI or use a Docker image.
-- CI (`.github/workflows/build.yml`) builds **every target** on each push —
-  see the matrix above. Tag a release
-  (`git tag v0.1.0 && git push origin v0.1.0`) to trigger
-  `.github/workflows/release.yml`, which attaches all artifacts to a GitHub
-  Release (Windows is now built **natively + smoke-tested** before it ships).
-  The iOS device build runs only when signing secrets (`IOS_TEAM_ID`) are
-  configured. Note that `_templ.go` and `output.css` are gitignored but
-  embedded into builds, so CI regenerates them first.
-- Keep the templ **generator** and templ **library** versions in sync
-  (`go.mod`); otherwise generated code may reference APIs the library lacks.
-- App Store / Play Store distribution (signing, metadata, review) is outside
-  irgo's scope — see the [irgo deployment docs](https://irgo.dev/docs/deployment).
+```bash
+go tool irgo upgrade
+```
 
----
+Refreshes framework-owned files — the native shells, `.air.toml`, `.gitignore`,
+`.github/workflows`, `mobile/`, this README. It **never** rewrites your code:
+`main.go`, `app/`, `handlers/`, `templates/`, `static/`, `go.mod` and
+`irgo.package.toml` are yours. Files of yours that differ from the current
+template are listed, not touched — `--diff` shows what changed upstream.
+
+To move the CLI version, edit the requirement in go.mod; everything follows.
 
 ## Router & Handlers
 
