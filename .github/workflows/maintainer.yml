@@ -1,10 +1,13 @@
-# Demo-repo checks that a normal irgo project must NOT have.
+# Demo-repo checks that a normal irgo project must not have.
 #
 # build.yml and release.yml are scaffolded by `irgo ci` and committed
-# unmodified — they are the workflows every irgo project gets, and this repo
-# exists partly to prove they work. Anything specific to maintaining this demo
-# against the joeblew999/irgo fork lives here instead, so the scaffolded files
-# stay byte-identical to the template.
+# unmodified — they are what every irgo project gets, and this repo exists
+# partly to prove they work. Anything specific to maintaining this demo against
+# the joeblew999/irgo fork lives here, so those files stay byte-identical to
+# the template.
+#
+# Nothing installs the CLI: `go tool irgo` builds the version go.mod requires,
+# through the replace directive that points at the fork.
 
 name: maintainer
 
@@ -14,43 +17,26 @@ on:
   pull_request:
   workflow_dispatch:
 
-jobs:
-  pin:
-    name: CLI pin has not drifted
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      # Installs the fork CLI pinned by IRGO_REPLACE in mise.toml.
-      - run: mise run env:tools
-      - name: Export mise env to the job
-        run: |
-          mise env --json | jq -r 'to_entries[] | select(.key != "PATH") | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
-          mise env --json | jq -r '.GOBIN // empty' >> "$GITHUB_PATH"
-      # IRGO_REPLACE and go.mod must agree; when they drift, CI silently tests
-      # a different CLI than the repo claims to use.
-      - run: irgo doctor --strict
+env:
+  # The fork keeps the upstream module path, so the public proxy cannot serve
+  # it under joeblew999/irgo. Fetch it straight from GitHub.
+  GOPRIVATE: github.com/joeblew999/*
 
+jobs:
   regen:
     name: The app still matches `irgo new`
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: actions/setup-go@v5
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - run: mise run env:tools
-      - name: Export mise env to the job
-        run: |
-          mise env --json | jq -r 'to_entries[] | select(.key != "PATH") | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
-          mise env --json | jq -r '.GOBIN // empty' >> "$GITHUB_PATH"
+          go-version-file: go.mod
       # This repo IS the CLI's output. If regenerating changes a tracked file,
       # something was hand-edited here instead of fixed in the template.
       - name: Regenerate and diff
         run: |
-          mise run cli:regen
+          go tool irgo new .
+          rm -f Makefile dev.sh
           if ! git diff --quiet -- . ':!go.sum'; then
             echo "::error::regenerating changed tracked files — fix the template, not this repo"
             git diff --stat -- . ':!go.sum'
@@ -64,23 +50,18 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v4
+      - uses: actions/setup-go@v5
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - run: mise run env:tools
-      - name: Export mise env to the job
-        run: |
-          mise env --json | jq -r 'to_entries[] | select(.key != "PATH") | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
-          mise env --json | jq -r '.GOBIN // empty' >> "$GITHUB_PATH"
-      - run: irgo install-tools android
-      - run: irgo doctor android
-      - run: irgo build android
+          go-version-file: go.mod
+      - run: go tool irgo install-tools android
+      - run: go tool irgo doctor android
+      - run: go tool irgo build android
       # Proves the uninstall is the exact inverse: the machine must come back
       # clean, or a provisioning bug hides behind whatever was left behind.
       - name: Uninstall and verify removal
         run: |
-          irgo uninstall-tools android --remove-jdk
-          irgo uninstall-tools --all
+          go tool irgo uninstall-tools android --remove-jdk
+          go tool irgo uninstall-tools --all
           for p in "${ANDROID_HOME:-$HOME/Library/Android/sdk}" "$HOME/.irgo" "$HOME/.android" "$HOME/.gradle"; do
             [ -e "$p" ] && { echo "::error::expected removed but exists: $p"; exit 1; }
           done
