@@ -53,15 +53,15 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: go tool irgo install-tools android
-      - run: go tool irgo doctor android
+      - run: go tool irgo tools install android
+      - run: go tool irgo tools doctor android
       - run: go tool irgo build android
       # Proves the uninstall is the exact inverse: the machine must come back
       # clean, or a provisioning bug hides behind whatever was left behind.
       - name: Uninstall and verify removal
         run: |
-          go tool irgo uninstall-tools android --remove-jdk
-          go tool irgo uninstall-tools --all
+          go tool irgo tools remove android --remove-jdk
+          go tool irgo tools remove --all
           for p in "${ANDROID_HOME:-$HOME/Library/Android/sdk}" "$HOME/.irgo" "$HOME/.android" "$HOME/.gradle"; do
             [ -e "$p" ] && { echo "::error::expected removed but exists: $p"; exit 1; }
           done
