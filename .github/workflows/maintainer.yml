@@ -35,7 +35,7 @@ jobs:
       # something was hand-edited here instead of fixed in the template.
       - name: Regenerate and diff
         run: |
-          go tool irgo new .
+          go tool irgo project new .
           rm -f Makefile dev.sh
           if ! git diff --quiet -- . ':!go.sum'; then
             echo "::error::regenerating changed tracked files — fix the template, not this repo"
@@ -55,7 +55,7 @@ jobs:
           go-version-file: go.mod
       - run: go tool irgo tools install android
       - run: go tool irgo tools doctor android
-      - run: go tool irgo build android
+      - run: go tool irgo app build android
       # Proves the uninstall is the exact inverse: the machine must come back
       # clean, or a provisioning bug hides behind whatever was left behind.
       - name: Uninstall and verify removal
