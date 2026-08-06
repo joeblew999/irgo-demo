@@ -15,11 +15,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  # This repo tracks a fork, whose module path the public proxy cannot
-  # serve. Scaffolded projects on a published release do not need this.
-  GOPRIVATE: github.com/joeblew999/*
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

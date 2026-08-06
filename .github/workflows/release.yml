@@ -18,9 +18,6 @@ on:
 env:
   IRGO_VERSION: "{{IRGO_VERSION}}"
 
-env:
-  GOPRIVATE: github.com/joeblew999/*
-
 jobs:
   android:
     name: Android (.aab)
