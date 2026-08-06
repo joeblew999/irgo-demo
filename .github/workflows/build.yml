@@ -1,22 +1,11 @@
-# Builds every target on each push: Go tests + web, native Linux/macOS/Windows
-# desktop (Windows is smoke-run), iOS framework + simulator, and Android AAR
-# (install → doctor → build → uninstall round-trip).
+# Builds every target irgo supports, on the OS each one requires.
 #
-# No emulator job: booting one in CI is slow and fragile for little signal —
-# the AAR build already proves the toolchain. Emulator runs are a local
-# concern (`irgo run android`), and the CLI gates on the environment itself,
-# failing fast where an emulator cannot run at all.
+# Scaffolded by `irgo ci` — regenerate with `irgo ci --force`. The jobs mirror
+# what `irgo doctor` reports locally: iOS needs macOS, the Linux desktop needs
+# Linux, and Windows desktop builds natively here rather than cross-compiling.
 #
-# Every job starts from the shared `setup` composite action
-# (.github/actions/setup): checkout + mise + `mise run env:tools`, which
-# installs the irgo CLI pinned by IRGO_REPLACE.
-#
-# Gotchas:
-#   1. _templ.go + output.css are gitignored but embedded -> irgo build
-#      regenerates them; steps that call go directly run `irgo assets` first
-#   2. webview_go links webkit2gtk-4.0 -> ubuntu-22.04 (not 24.04)
-#   3. iOS device/App Store builds need signing -> gated on IOS_TEAM_ID
-#   4. never ship an exe that was never run -> Windows is smoke-tested
+# The CLI provisions its own toolchains, so there are no SDK/NDK/JDK setup
+# steps: `irgo build android` installs what it needs on a bare runner.
 
 name: build
 
@@ -30,188 +19,131 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Pin the CLI so CI and developers build with the same version.
+  IRGO_VERSION: "v0.4.0-androidapi21.52"
+  # Set when the project pins a fork. A fork keeps the upstream module path, so
+  # `go install` cannot fetch it by repo — it has to be cloned and built.
+  # Empty means the published module, which is the normal case.
+  IRGO_FORK_REPO: "joeblew999/irgo"
+
 jobs:
   check:
     name: Check (tests + web)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
+      - uses: actions/setup-go@v5
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      # This job runs go directly rather than `irgo build`, so it has to ask
-      # for the generated-but-embedded assets itself.
-      - name: Regenerate embedded assets
-        working-directory: myapp
-        run: irgo assets
-      # The pin in mise.toml and the replace directive in myapp/go.mod must
-      # agree; when they drift, CI silently tests a different CLI than the one
-      # the repo claims to use.
-      - name: Verify the CLI pin has not drifted
-        working-directory: myapp
-        run: irgo doctor --strict
-      - name: Run Go tests
-        working-directory: myapp
-        run: go test ./...
-      - name: Build web binary
-        working-directory: myapp
-        run: go build -o build/myapp .
+          go-version-file: go.mod
+      - name: Install irgo
+        run: |
+          if [ -n "$IRGO_FORK_REPO" ]; then
+            tmp="$(mktemp -d)"
+            git clone --quiet --depth 1 --branch "$IRGO_VERSION" \
+              "https://github.com/$IRGO_FORK_REPO" "$tmp/irgo"
+            (cd "$tmp/irgo" && go install ./cmd/irgo)
+          else
+            go install github.com/stukennedy/irgo/cmd/irgo@"$IRGO_VERSION"
+          fi
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      # _templ.go and output.css are generated and gitignored, but embedded in
+      # the binary. `irgo build` regenerates them; a plain `go build` needs this.
+      - run: irgo assets
+      - run: go test ./...
+      - run: go build -o build/myapp .
       - uses: actions/upload-artifact@v4
         with:
           name: web
-          path: myapp/build/myapp
+          path: build/myapp
           if-no-files-found: error
 
-  # Desktop — one matrix job, native build per OS. Linux needs OS packages
-  # (webkit2gtk); Windows is smoke-run after build (never ship a never-run exe).
   desktop:
     name: Desktop (${{ matrix.name }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Linux
-            os: ubuntu-22.04
-            needs_os_pkgs: true
-            cmd: irgo build desktop linux
-            artifact: desktop-linux
-            path: myapp/build/desktop/linux/
-            smoke: false
-          - name: macOS
-            os: macos-latest
-            needs_os_pkgs: false
-            cmd: irgo build desktop
-            artifact: desktop-macos
-            path: myapp/build/desktop/macos/
-            smoke: false
-          - name: Windows
-            os: windows-latest
-            needs_os_pkgs: false
-            cmd: irgo build desktop windows
-            artifact: desktop-windows-native
-            path: myapp/build/desktop/windows/
-            smoke: true
+          # webview links webkit2gtk-4.0, which ubuntu-24.04 no longer ships.
+          - { name: Linux,   os: ubuntu-22.04,   target: linux,   artifact: desktop-linux }
+          - { name: macOS,   os: macos-latest,   target: darwin,  artifact: desktop-macos }
+          - { name: Windows, os: windows-latest, target: windows, artifact: desktop-windows }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
+      - uses: actions/setup-go@v5
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install host packages (GTK/WebKit for the Linux webview)
-        if: matrix.needs_os_pkgs
-        working-directory: myapp
-        run: irgo install-tools
-      - name: Build desktop app
-        working-directory: myapp
-        run: ${{ matrix.cmd }}
-      - name: Smoke test (launch + assert alive)
-        if: matrix.smoke
-        shell: pwsh
+          go-version-file: go.mod
+      - name: Install irgo
         run: |
-          $dir = "myapp\build\desktop\windows"
-          $exe = Join-Path $dir "myapp.exe"
-          if (-not (Test-Path $exe)) { Write-Error "exe not found: $exe"; exit 1 }
-          $out = Join-Path $dir "smoke.out.log"
-          $err = Join-Path $dir "smoke.err.log"
-          $p = Start-Process -FilePath $exe -WorkingDirectory $dir `
-            -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
-          Start-Sleep -Seconds 15
-          if ($p.HasExited) {
-            Write-Host "::error::myapp.exe exited early (code $($p.ExitCode))"
-            if (Test-Path $out) { Write-Host "--- stdout ---"; Get-Content $out }
-            if (Test-Path $err) { Write-Host "--- stderr ---"; Get-Content $err }
-            exit 1
-          }
-          Write-Host "Smoke test PASSED — myapp.exe still running (pid $($p.Id))"
-          Stop-Process -Id $p.Id -Force
+          if [ -n "$IRGO_FORK_REPO" ]; then
+            tmp="$(mktemp -d)"
+            git clone --quiet --depth 1 --branch "$IRGO_VERSION" \
+              "https://github.com/$IRGO_FORK_REPO" "$tmp/irgo"
+            (cd "$tmp/irgo" && go install ./cmd/irgo)
+          else
+            go install github.com/stukennedy/irgo/cmd/irgo@"$IRGO_VERSION"
+          fi
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      # Installs GTK/WebKit on Linux; a no-op where nothing is missing.
+      - run: irgo install-tools
+      - run: irgo build desktop ${{ matrix.target }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.path }}
+          path: build/desktop/${{ matrix.target == 'darwin' && 'macos' || matrix.target }}/
           if-no-files-found: error
 
   ios:
-    name: iOS framework + simulator
+    name: iOS (framework + simulator)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
+      - uses: actions/setup-go@v5
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build iOS framework + simulator app
-        working-directory: myapp
-        run: irgo build ios --sim
+          go-version-file: go.mod
+      - name: Install irgo
+        run: |
+          if [ -n "$IRGO_FORK_REPO" ]; then
+            tmp="$(mktemp -d)"
+            git clone --quiet --depth 1 --branch "$IRGO_VERSION" \
+              "https://github.com/$IRGO_FORK_REPO" "$tmp/irgo"
+            (cd "$tmp/irgo" && go install ./cmd/irgo)
+          else
+            go install github.com/stukennedy/irgo/cmd/irgo@"$IRGO_VERSION"
+          fi
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - run: irgo build ios --sim
       - uses: actions/upload-artifact@v4
         with:
           name: ios-simulator
-          path: |
-            myapp/build/ios/Irgo.xcframework/
-            myapp/build/ios/DerivedData/Build/Products/Debug-iphonesimulator/Example.app/
+          path: build/ios/DerivedData/Build/Products/Debug-iphonesimulator/
           if-no-files-found: error
 
   android:
-    name: Android framework (install → doctor → build → uninstall round-trip)
-    runs-on: macos-latest
+    name: Android (AAR)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
+      - uses: actions/setup-go@v5
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Android toolchain
-        working-directory: myapp
-        run: irgo install-tools android
-      - name: Verify toolchain
-        working-directory: myapp
-        run: irgo doctor android
-      - name: Build Android AAR
-        working-directory: myapp
-        run: irgo build android
+          go-version-file: go.mod
+      - name: Install irgo
+        run: |
+          if [ -n "$IRGO_FORK_REPO" ]; then
+            tmp="$(mktemp -d)"
+            git clone --quiet --depth 1 --branch "$IRGO_VERSION" \
+              "https://github.com/$IRGO_FORK_REPO" "$tmp/irgo"
+            (cd "$tmp/irgo" && go install ./cmd/irgo)
+          else
+            go install github.com/stukennedy/irgo/cmd/irgo@"$IRGO_VERSION"
+          fi
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      # No SDK/NDK/JDK setup: the CLI provisions the whole toolchain itself.
+      - run: irgo build android
+      - run: irgo doctor android
       - uses: actions/upload-artifact@v4
         with:
           name: android-framework
-          path: myapp/build/android/
-          if-no-files-found: error
-      # Proves the CLI's uninstall is the exact inverse: toolchain must be gone.
-      - name: Round-trip — uninstall and verify removal
-        run: |
-          cd myapp
-          irgo uninstall-tools android --remove-jdk
-          irgo uninstall-tools --all
-          cd ..
-          for p in "${ANDROID_HOME:-$HOME/Library/Android/sdk}" "$HOME/.irgo" "$HOME/.android" "$HOME/.gradle"; do
-            [ -e "$p" ] && { echo "::error::expected removed but exists: $p"; exit 1; }
-          done
-          echo "uninstall round-trip OK — machine clean"
-
-  check-ios-signing:
-    name: Detect iOS signing secrets
-    runs-on: ubuntu-latest
-    outputs:
-      has_ios_team: ${{ steps.detect.outputs.has_ios_team }}
-    steps:
-      - id: detect
-        env:
-          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
-        run: echo "has_ios_team=${{ env.IOS_TEAM_ID != '' }}" >> "$GITHUB_OUTPUT"
-
-  ios-device:
-    name: iOS device (App Store) — requires signing secrets
-    runs-on: macos-latest
-    needs: [ios, check-ios-signing]
-    if: needs.check-ios-signing.outputs.has_ios_team == 'true'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      # Signing: add a Distribution cert + provisioning profile to the runner
-      # keychain (e.g. via apple-actions/import-codesign-certs) and set the
-      # IOS_TEAM_ID secret. Without it this job is skipped.
-      - name: Build iOS Release (device)
-        working-directory: myapp
-        run: irgo build ios --device --team ${{ secrets.IOS_TEAM_ID }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ios-device
-          path: myapp/build/ios/DerivedData-Release/Build/Products/Release-iphoneos/Example.app/
+          path: build/android/
           if-no-files-found: error

@@ -1,4 +1,4 @@
-module myapp
+module irgo-demo
 
 go 1.26.5
 

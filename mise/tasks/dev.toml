@@ -19,7 +19,7 @@
 
 ["env:tools"]
 description = "Install the irgo CLI (fork) + irgo install-tools (templ pinned to go.mod, air, gomobile) — idempotent"
-dir = "{{config_root}}/myapp"
+dir = "{{config_root}}"
 run = """
 # Pinned to go.mod to avoid @latest drift: the irgo CLI must match the go.mod
 # irgo version, and the templ generator must match the templ library version.
@@ -132,26 +132,24 @@ echo "Bumped to $TAG. Review and commit."
 """
 
 ["cli:regen"]
-description = "Regenerate myapp/ from the pinned CLI (preserves gitignored local assets)"
+description = "Regenerate the app from the pinned CLI (this repo IS irgo new output)"
 dir = "{{config_root}}"
 run = """
 set -e
-# appicon.png and irgo.package.toml are gitignored, so git cannot restore them.
-TMP="$(mktemp -d)"
-for f in appicon.png irgo.package.toml; do
-  [ -f "myapp/$f" ] && cp "myapp/$f" "$TMP/"
-done
-rm -rf myapp
-irgo new myapp
-for f in appicon.png irgo.package.toml; do
-  [ -f "$TMP/$f" ] && cp "$TMP/$f" "myapp/"
-done
-rm -rf "$TMP"
+# The repo root is the generated app, so regeneration writes in place rather
+# than deleting a subdirectory. `irgo new .` overwrites the files it owns and
+# leaves everything else — maintainer tooling, README, git history — alone.
+irgo new .
+# Files the template no longer ships (a Makefile, dev.sh) would otherwise
+# linger forever, since writing in place cannot remove them. Delete the ones
+# we know were dropped.
+rm -f Makefile dev.sh
 """
+
 
 ["cli:verify"]
 description = "Fail if the pinned CLI and myapp/go.mod disagree"
-dir = "{{config_root}}/myapp"
+dir = "{{config_root}}"
 run = "irgo doctor --strict"
 
 ["cli:local"]

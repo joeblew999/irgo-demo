@@ -9,8 +9,14 @@ native iOS, Android, desktop, and web apps from a single Go codebase
 ## Stack
 
 - **Go 1.26.5** + **node LTS** — managed via [mise](https://mise.jdx.dev) (OS-agnostic toolchain)
-- `myapp/` — **generated output**, not source. It is produced wholesale by
-  `irgo new myapp`. Never hand-edit it; change the CLI templates and regenerate.
+- **This repo is the generated app.** The root *is* `irgo new` output — never
+  hand-edit it; change the CLI templates and regenerate with
+  `mise run cli:regen`. CI enforces that: the `regen` job fails if regenerating
+  changes a tracked file.
+- `.github/workflows/build.yml` and `release.yml` are **scaffolded by `irgo ci`
+  and committed unmodified** — they are what every irgo project gets, so this
+  repo proves they work on every push. Demo-only checks live in
+  `maintainer.yml`.
 
 ## How the CLI and this repo stay lined up
 
@@ -47,7 +53,7 @@ Everything else installs itself on first use — see below.
 ```bash
 mise install          # pinned toolchain (go, node, bun)
 mise run env:tools    # the irgo CLI at IRGO_REPLACE
-cd myapp && irgo doctor   # what can this machine build?
+irgo doctor           # what can this machine build?
 ```
 
 Idempotent — safe to re-run any time.
@@ -80,7 +86,7 @@ Then open http://localhost:8080.
 
 The CLI is the reference — `irgo help` and `irgo help <command>` are the source
 of truth, including the `IRGO_REPLACE` / `IRGO_PATH` contract in `irgo help new`.
-Run these from `myapp/`:
+Run these from the repo root:
 
 | Command | Description |
 |---|---|

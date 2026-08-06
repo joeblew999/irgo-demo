@@ -3,7 +3,7 @@ package handlers_test
 import (
 	"testing"
 
-	"myapp/app"
+	"irgo-demo/app"
 	irgotest "github.com/stukennedy/irgo/pkg/testing"
 )
 

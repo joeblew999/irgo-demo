@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"os"
 
-	"myapp/app"
-	"myapp/templates"
+	"irgo-demo/app"
+	"irgo-demo/templates"
 	"github.com/stukennedy/irgo/pkg/livereload"
 )
 
@@ -21,7 +21,7 @@ func main() {
 	}
 
 	// Default: show usage
-	fmt.Println("myapp - built with irgo")
+	fmt.Println("irgo-demo - built with irgo")
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  go run . serve       Start development server")

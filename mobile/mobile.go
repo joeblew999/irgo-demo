@@ -19,7 +19,7 @@ package mobile
 import (
 	"fmt"
 
-	"myapp/app"
+	"irgo-demo/app"
 	irgomobile "github.com/stukennedy/irgo/mobile"
 )
 
@@ -33,7 +33,7 @@ func Initialize() {
 	irgomobile.SetHandler(r.Handler())
 	irgomobile.Initialize()
 
-	fmt.Println("myapp mobile initialized")
+	fmt.Println("irgo-demo mobile initialized")
 }
 
 // --- HTTP ---

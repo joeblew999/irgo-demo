@@ -6,9 +6,9 @@ import (
 	"io/fs"
 	"net/http"
 
-	"myapp/handlers"
-	"myapp/static"
-	"myapp/templates"
+	"irgo-demo/handlers"
+	"irgo-demo/static"
+	"irgo-demo/templates"
 	"github.com/stukennedy/irgo/pkg/render"
 	"github.com/stukennedy/irgo/pkg/router"
 )

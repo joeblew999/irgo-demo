@@ -1,0 +1,87 @@
+# Demo-repo checks that a normal irgo project must NOT have.
+#
+# build.yml and release.yml are scaffolded by `irgo ci` and committed
+# unmodified — they are the workflows every irgo project gets, and this repo
+# exists partly to prove they work. Anything specific to maintaining this demo
+# against the joeblew999/irgo fork lives here instead, so the scaffolded files
+# stay byte-identical to the template.
+
+name: maintainer
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pin:
+    name: CLI pin has not drifted
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      # Installs the fork CLI pinned by IRGO_REPLACE in mise.toml.
+      - run: mise run env:tools
+      - name: Export mise env to the job
+        run: |
+          mise env --json | jq -r 'to_entries[] | select(.key != "PATH") | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+          mise env --json | jq -r '.GOBIN // empty' >> "$GITHUB_PATH"
+      # IRGO_REPLACE and go.mod must agree; when they drift, CI silently tests
+      # a different CLI than the repo claims to use.
+      - run: irgo doctor --strict
+
+  regen:
+    name: The app still matches `irgo new`
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - run: mise run env:tools
+      - name: Export mise env to the job
+        run: |
+          mise env --json | jq -r 'to_entries[] | select(.key != "PATH") | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+          mise env --json | jq -r '.GOBIN // empty' >> "$GITHUB_PATH"
+      # This repo IS the CLI's output. If regenerating changes a tracked file,
+      # something was hand-edited here instead of fixed in the template.
+      - name: Regenerate and diff
+        run: |
+          mise run cli:regen
+          if ! git diff --quiet -- . ':!go.sum'; then
+            echo "::error::regenerating changed tracked files — fix the template, not this repo"
+            git diff --stat -- . ':!go.sum'
+            git diff -- . ':!go.sum' | head -100
+            exit 1
+          fi
+          echo "app matches irgo new output"
+
+  toolchain:
+    name: Android toolchain round-trip (install → doctor → build → uninstall)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - run: mise run env:tools
+      - name: Export mise env to the job
+        run: |
+          mise env --json | jq -r 'to_entries[] | select(.key != "PATH") | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+          mise env --json | jq -r '.GOBIN // empty' >> "$GITHUB_PATH"
+      - run: irgo install-tools android
+      - run: irgo doctor android
+      - run: irgo build android
+      # Proves the uninstall is the exact inverse: the machine must come back
+      # clean, or a provisioning bug hides behind whatever was left behind.
+      - name: Uninstall and verify removal
+        run: |
+          irgo uninstall-tools android --remove-jdk
+          irgo uninstall-tools --all
+          for p in "${ANDROID_HOME:-$HOME/Library/Android/sdk}" "$HOME/.irgo" "$HOME/.android" "$HOME/.gradle"; do
+            [ -e "$p" ] && { echo "::error::expected removed but exists: $p"; exit 1; }
+          done
+          echo "uninstall round-trip OK — machine clean"

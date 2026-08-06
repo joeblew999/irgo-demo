@@ -1,168 +1,147 @@
-# Builds all targets and attaches them to a GitHub Release.
-# Triggered by pushing a version tag:  git tag v0.1.0 && git push origin v0.1.0
+# Store packages for every target, built on the OS each one requires and
+# attached to a GitHub Release.
 #
-# Reuses the same mise tasks as local dev + build.yml (single source of truth):
-#   irgo assets -> templ + Tailwind CSS (gitignored, but embedded in builds)
-#   build:desktop (macOS), build:desktop:linux, build:desktop:windows (native,
-#   smoke-tested before packaging), build:ios:sim, env:setup:android+build:android
+# Scaffolded by `irgo ci`. Each job is skipped unless its signing secrets are
+# configured, so this is useful before you have any of them: what is set gets
+# packaged, what is not is skipped rather than failing the run.
+#
+# Configure the values with `irgo package setup <store>`, then add them as
+# repository secrets. `irgo package setup --check` reports what is missing.
 
 name: release
 
 on:
   push:
-    tags: ['v*']
-  workflow_dispatch:   # manual trigger for testing the release pipeline
+    tags: ["v*"]
+  workflow_dispatch:
 
-permissions:
-  contents: write
+env:
+  IRGO_VERSION: "v0.4.0-androidapi21.52"
 
 jobs:
-  web:
-    name: Web binary
+  android:
+    name: Android (.aab)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
+      - uses: actions/setup-go@v5
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build web binary
-        working-directory: myapp
+          go-version-file: go.mod
+      - name: Install irgo
         run: |
-          irgo assets
-          go build -o build/myapp .
+          if [ -n "$IRGO_FORK_REPO" ]; then
+            tmp="$(mktemp -d)"
+            git clone --quiet --depth 1 --branch "$IRGO_VERSION" \
+              "https://github.com/$IRGO_FORK_REPO" "$tmp/irgo"
+            (cd "$tmp/irgo" && go install ./cmd/irgo)
+          else
+            go install github.com/stukennedy/irgo/cmd/irgo@"$IRGO_VERSION"
+          fi
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Package
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASS }}
         run: |
-          cd myapp/build
-          tar -czf myapp-web-${{ github.ref_name }}.tar.gz myapp
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+          irgo package android --keystore release.keystore \
+            --keystore-pass "$KEYSTORE_PASS" --key-alias "$KEY_ALIAS" --key-pass "$KEY_PASS"
+          rm -f release.keystore
+      - uses: actions/upload-artifact@v4
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         with:
-          files: myapp/build/myapp-web-*.tar.gz
+          name: android-aab
+          path: dist/
+          if-no-files-found: error
 
-  linux-desktop:
-    name: Linux desktop
-    runs-on: ubuntu-22.04   # webkit2gtk-4.0 unavailable on 24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install OS packages
-        working-directory: myapp
-        run: irgo install-tools
-      - name: Build Linux app
-        working-directory: myapp
-        run: irgo build desktop linux
-      - name: Package
-        run: |
-          cd myapp/build/desktop/linux
-          tar -czf myapp-linux-${{ github.ref_name }}.tar.gz myapp static
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: myapp/build/desktop/linux/myapp-linux-*.tar.gz
-
-  macos-desktop:
-    name: macOS desktop
+  ios:
+    name: iOS (.ipa)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
+      - uses: actions/setup-go@v5
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build macOS app
-        working-directory: myapp
-        run: irgo build desktop
-      - name: Package macOS app bundle
+          go-version-file: go.mod
+      - name: Install irgo
         run: |
-          cd myapp/build/desktop/macos
-          ditto -c -k --keepParent myapp.app myapp-macos-${{ github.ref_name }}.zip
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+          if [ -n "$IRGO_FORK_REPO" ]; then
+            tmp="$(mktemp -d)"
+            git clone --quiet --depth 1 --branch "$IRGO_VERSION" \
+              "https://github.com/$IRGO_FORK_REPO" "$tmp/irgo"
+            (cd "$tmp/irgo" && go install ./cmd/irgo)
+          else
+            go install github.com/stukennedy/irgo/cmd/irgo@"$IRGO_VERSION"
+          fi
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      # Signing needs a Distribution cert and provisioning profile in the
+      # runner keychain — e.g. apple-actions/import-codesign-certs.
+      - name: Package
+        if: ${{ secrets.IOS_TEAM_ID != '' }}
+        run: irgo package ios --team ${{ secrets.IOS_TEAM_ID }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ secrets.IOS_TEAM_ID != '' }}
         with:
-          files: myapp/build/desktop/macos/*.zip
+          name: ios-ipa
+          path: dist/
+          if-no-files-found: error
 
-  windows-desktop:
-    name: Windows desktop (native build + smoke test)
+  macos:
+    name: macOS (.app/.dmg)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install irgo
+        run: |
+          if [ -n "$IRGO_FORK_REPO" ]; then
+            tmp="$(mktemp -d)"
+            git clone --quiet --depth 1 --branch "$IRGO_VERSION" \
+              "https://github.com/$IRGO_FORK_REPO" "$tmp/irgo"
+            (cd "$tmp/irgo" && go install ./cmd/irgo)
+          else
+            go install github.com/stukennedy/irgo/cmd/irgo@"$IRGO_VERSION"
+          fi
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Package
+        if: ${{ secrets.MACOS_IDENTITY != '' }}
+        run: irgo package macos --identity "${{ secrets.MACOS_IDENTITY }}" --dmg
+      - uses: actions/upload-artifact@v4
+        if: ${{ secrets.MACOS_IDENTITY != '' }}
+        with:
+          name: macos-dmg
+          path: dist/
+          if-no-files-found: error
+
+  windows:
+    name: Windows (.msix)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
+      - uses: actions/setup-go@v5
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build Windows app (native)
-        working-directory: myapp
-        run: irgo build desktop windows
-      - name: Smoke test (launch + assert alive)
-        shell: pwsh
+          go-version-file: go.mod
+      - name: Install irgo
         run: |
-          $dir = "myapp\build\desktop\windows"
-          $exe = Join-Path $dir "myapp.exe"
-          if (-not (Test-Path $exe)) { Write-Error "exe not found: $exe"; exit 1 }
-          $out = Join-Path $dir "smoke.out.log"
-          $err = Join-Path $dir "smoke.err.log"
-          $p = Start-Process -FilePath $exe -WorkingDirectory $dir `
-            -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
-          Start-Sleep -Seconds 15
-          if ($p.HasExited) {
-            Write-Host "::error::myapp.exe exited early (code $($p.ExitCode))"
-            if (Test-Path $out) { Write-Host "--- stdout ---"; Get-Content $out }
-            if (Test-Path $err) { Write-Host "--- stderr ---"; Get-Content $err }
-            exit 1
-          }
-          Write-Host "Smoke test PASSED — myapp.exe still running (pid $($p.Id))"
-          Stop-Process -Id $p.Id -Force
-      - name: Package Windows exe
-        shell: pwsh
-        run: |
-          $dir = "myapp\build\desktop\windows"
-          $zip = Join-Path $dir "myapp-windows-${{ github.ref_name }}.zip"
-          Compress-Archive -Path (Join-Path $dir "myapp.exe"), (Join-Path $dir "static") -DestinationPath $zip -Force
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: myapp/build/desktop/windows/myapp-windows-*.zip
-
-  ios:
-    name: iOS framework + simulator app
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build iOS framework + simulator app
-        working-directory: myapp
-        run: irgo build ios --sim
+          if [ -n "$IRGO_FORK_REPO" ]; then
+            tmp="$(mktemp -d)"
+            git clone --quiet --depth 1 --branch "$IRGO_VERSION" \
+              "https://github.com/$IRGO_FORK_REPO" "$tmp/irgo"
+            (cd "$tmp/irgo" && go install ./cmd/irgo)
+          else
+            go install github.com/stukennedy/irgo/cmd/irgo@"$IRGO_VERSION"
+          fi
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      # MakeAppx/signtool come from the Windows SDK, preinstalled on the runner.
       - name: Package
-        run: |
-          cd myapp/build/ios
-          ditto -c -k --keepParent Irgo.xcframework Irgo-${{ github.ref_name }}.zip
-          ditto -c -k --keepParent DerivedData/Build/Products/Debug-iphonesimulator/Example.app Example-ios-simulator-${{ github.ref_name }}.zip
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        if: ${{ secrets.WINDOWS_PUBLISHER != '' }}
+        run: irgo package windows --publisher "${{ secrets.WINDOWS_PUBLISHER }}"
+      - uses: actions/upload-artifact@v4
+        if: ${{ secrets.WINDOWS_PUBLISHER != '' }}
         with:
-          files: myapp/build/ios/*.zip
-
-  android:
-    name: Android framework
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Android SDK + NDK
-        working-directory: myapp
-        run: irgo install-tools android
-      - name: Build Android AAR
-        working-directory: myapp
-        run: irgo build android
-      - name: Package
-        run: |
-          cd myapp/build/android
-          zip -r irgo-android-${{ github.ref_name }}.zip irgo.aar
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: myapp/build/android/irgo-android-*.zip
+          name: windows-msix
+          path: dist/
+          if-no-files-found: error

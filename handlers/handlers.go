@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"myapp/templates"
+	"irgo-demo/templates"
 	"github.com/stukennedy/irgo/pkg/router"
 )
 

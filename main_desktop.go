@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"myapp/app"
-	"myapp/templates"
+	"irgo-demo/app"
+	"irgo-demo/templates"
 	"github.com/stukennedy/irgo/desktop"
 	"github.com/stukennedy/irgo/pkg/livereload"
 )
@@ -38,13 +38,13 @@ func main() {
 
 	// Configure desktop app
 	config := desktop.DefaultConfig()
-	config.Title = "myapp"
+	config.Title = "irgo-demo"
 	config.Debug = *devMode
 
 	// Create and run desktop app
 	desktopApp := desktop.New(mux, config)
 
-	fmt.Println("Starting myapp desktop app...")
+	fmt.Println("Starting irgo-demo desktop app...")
 	if err := desktopApp.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)
 	}
