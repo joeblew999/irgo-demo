@@ -60,8 +60,10 @@ jobs:
       # clean, or a provisioning bug hides behind whatever was left behind.
       - name: Uninstall and verify removal
         run: |
-          go tool irgo tools remove android --remove-jdk
-          go tool irgo tools remove --all
+          # --yes: removal now shows what it will delete and asks, and refuses
+          # outside a terminal rather than assuming yes. One call covers the
+          # Android toolchain too.
+          go tool irgo tools remove --all --yes
           for p in "${ANDROID_HOME:-$HOME/Library/Android/sdk}" "$HOME/.irgo" "$HOME/.android" "$HOME/.gradle"; do
             [ -e "$p" ] && { echo "::error::expected removed but exists: $p"; exit 1; }
           done
