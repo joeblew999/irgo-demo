@@ -13,7 +13,7 @@
 version = "0.1.0"
 
 [ios]
-team = ""
+team = "9Z237BG9S9"
 export_method = "app-store"
 
 [android]
