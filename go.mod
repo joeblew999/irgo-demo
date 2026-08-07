@@ -17,8 +17,15 @@ require (
 	github.com/starfederation/datastar-go v1.1.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
+	golang.org/x/mobile v0.0.0-20260803200217-62cee1672c8e // indirect
+	golang.org/x/mod v0.38.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/tools v0.48.0 // indirect
 )
 
-replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.119
+replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.125
 
-tool github.com/stukennedy/irgo/cmd/irgo
+tool (
+	github.com/stukennedy/irgo/cmd/irgo
+	golang.org/x/mobile/cmd/gobind
+)
