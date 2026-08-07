@@ -19,6 +19,6 @@ require (
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
 )
 
-replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.112
+replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.117
 
 tool github.com/stukennedy/irgo/cmd/irgo
