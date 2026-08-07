@@ -1,6 +1,6 @@
 module irgo-demo
 
-go 1.26.5
+go 1.25.0
 
 require (
 	github.com/a-h/templ v0.3.977
@@ -19,6 +19,6 @@ require (
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
 )
 
-replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.117
+replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.4.0-androidapi21.119
 
 tool github.com/stukennedy/irgo/cmd/irgo
