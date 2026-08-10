@@ -81,3 +81,20 @@ run = "go tool irgo app stop android"
 [tasks.worker]
 description = "Build the Cloudflare Worker"
 run = "go tool irgo app build cloudflare"
+
+[tasks.i18n]
+# Opt-in: a project without a tokibundle/ has no translation machinery and no
+# extra dependency. Run this once to add it, then `irgo i18n add <locale>`.
+#
+# Use i18n.Reader rather than tokibundle.Match directly — the matcher never
+# fails, so a language you have no catalog for silently becomes whichever
+# catalog happens to be first.
+description = "Set up or inspect translations"
+run = "go tool irgo i18n list"
+
+[tasks.i18n-check]
+# For CI, before a release. Not part of `check`: a half-translated app is a
+# normal state to be in, and failing every build over it would teach people to
+# stop running the check that catches everything else.
+description = "Fail if any translation is incomplete"
+run = "go tool irgo i18n check"
