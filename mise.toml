@@ -71,6 +71,13 @@ run = "go tool irgo app run ios"
 description = "Build and run on the Android emulator"
 run = "go tool irgo app run android"
 
+[tasks.stop]
+# irgo leaves the emulator running between runs, because booting takes minutes
+# and running the app twice should not cost that twice. This is the other end:
+# one left going here used 760% CPU for days.
+description = "Stop the Android emulator"
+run = "go tool irgo app stop android"
+
 [tasks.worker]
 description = "Build the Cloudflare Worker"
 run = "go tool irgo app build cloudflare"
