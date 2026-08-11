@@ -33,7 +33,7 @@ require (
 	golang.org/x/tools v0.48.0 // indirect
 )
 
-replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.15.2
+replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.16.0
 
 tool (
 	github.com/stukennedy/irgo/cmd/irgo
