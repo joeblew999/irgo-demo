@@ -1,10 +1,10 @@
 package templates
 
 import (
+	"irgo-demo/tokibundle"
+
 	"fmt"
 	"math"
-
-	"irgo-demo/tokibundle"
 )
 
 templ HomePage(t tokibundle.Reader) {
@@ -77,6 +77,7 @@ templ HomePage(t tokibundle.Reader) {
 						<span class="badge">Templ</span>
 						<span class="badge">Datastar</span>
 					</div>
+					@LanguageSwitcher(t.Locale().String())
 				</div>
 
 				<nav class="action-buttons">
@@ -258,4 +259,31 @@ templ Greeting(name string) {
 templ PulseStats(count int, latencyMs int) {
 	<span id="pulse-count" class="stat-value mono">{ fmt.Sprintf("%d", count) }</span>
 	<span id="latency" class="stat-value mono">{ fmt.Sprintf("%dms", latencyMs) }</span>
+}
+
+// LanguageSwitcher is how anyone — a visitor or the developer — changes the
+// language, on every target irgo builds for.
+//
+// A link with ?lang=, because that is the one mechanism all six targets share.
+// The platform ways are all different and mostly hostile: adb setprop and a
+// runtime restart on Android, simctl launch arguments on iOS, a browser flag
+// and a throwaway profile for the service worker. None of them is available
+// while clicking around, and none works on a phone in your hand.
+//
+// i18n.Remember turns the click into a cookie, so it survives the next
+// navigation. The list comes from the bundle rather than from the project's
+// own lang package, so `irgo i18n add fr` puts French here with nothing else
+// to change — and a project whose lang/lang.go predates this still builds.
+templ LanguageSwitcher(current string) {
+	<nav class="lang-switcher" aria-label="Language">
+		for _, l := range tokibundle.Locales() {
+			if l.String() == current {
+				<span class="lang-current" aria-current="true">{ l.String() }</span>
+			} else {
+				<a class="lang-link" href={ templ.SafeURL("?lang=" + l.String()) } hreflang={ l.String() }>
+					{ l.String() }
+				</a>
+			}
+		}
+	</nav>
 }

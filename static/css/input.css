@@ -2,6 +2,25 @@
 
 @import "tailwindcss";
 
+/* Native-app feel inside the mobile/desktop WebView:
+   - no grey tap-highlight flash on taps
+   - no long-press magnifier/callout sheet on links and images
+   - no rubber-band overscroll of the page itself
+   -webkit-touch-callout is scoped to links/images rather than set on html:
+   it inherits, so a root-level `none` would also suppress the system
+   selection/copy callout on inputs, textareas and contenteditable. */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  a, img {
+    -webkit-touch-callout: none;
+  }
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
 /* ============================================
    CONSTELLATION DEMO - Cosmic Theme
    ============================================ */
@@ -483,4 +502,29 @@ html, body {
 
 .connected {
   color: var(--color-aurora-1) !important;
+}
+
+/* Language switcher — how anyone changes the language on any target. */
+.lang-switcher {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+.lang-link,
+.lang-current {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  text-decoration: none;
+}
+.lang-link { color: rgba(255, 255, 255, 0.55); }
+.lang-link:hover { color: #fff; border-color: rgba(255, 255, 255, 0.4); }
+.lang-current {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.08);
 }
