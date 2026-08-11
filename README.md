@@ -405,6 +405,45 @@ templ LoadButton() {
 }
 ```
 
+## Translations
+
+This demo speaks English, German, French and Japanese. It picks by
+`Accept-Language`, so changing your browser's language changes the page.
+
+```sh
+mise run i18n          # what this project speaks
+mise run i18n-check    # fail if a translation is unfinished (CI)
+```
+
+Text is written as a TIK in the templates and extracted by
+[toki](https://github.com/romshark/toki) into `tokibundle/catalog_<locale>.arb`,
+which is the file a translator edits:
+
+```go
+templ HomePage(t tokibundle.Reader) {
+    <p class="tagline">{ t.String(`Server-driven hypermedia for Go`) }</p>
+}
+```
+
+`lang.For(r)` picks the reader, and every entry point uses it — the page route
+*and* the SSE handlers. That second part is the one to get right: the
+connection status is patched over SSE after the first render, so a fragment
+that forgot the reader would revert that corner of the page to English while
+everything around it stayed German.
+
+**`lang.For` goes through `i18n.Reader`, never `tokibundle.Match` directly.**
+The matcher never fails: asked for a language with no catalog, it returns
+whichever catalog is first and reports its lack of confidence in a second
+return value. Discard that — as `reader, _ := tokibundle.Match(...)` does — and
+a Brazilian visitor gets German. Nothing errors, nothing logs, and the page
+renders perfectly. `handlers/i18n_test.go` pins seven cases; `pt-BR` is the one
+that would otherwise pass wrongly.
+
+`tokibundle/` is committed **in full, including the generated `_gen.go` files**,
+unlike `*_templ.go`. It cannot be rebuilt from what would be left behind: the
+default locale lives only in `bundle_gen.go`, and toki analyses Go source that
+stops compiling once the imported package is gone.
+
 ## Native Capabilities
 
 Call platform features (haptics, clipboard, share, storage, notifications)
