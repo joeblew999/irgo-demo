@@ -1,0 +1,34 @@
+{
+	"@@locale": "ja",
+	"@@last_modified": "2026-08-11T09:51:24+07:00",
+	"@@x-generator": "github.com/romshark/toki",
+	"@@x-generator-version": "v0.8.4",
+	"msg67d55c3a4cd41132": "接続中...",
+	"@msg67d55c3a4cd41132": {
+		"type": "text"
+	},
+	"msg6c474fd0c1450d76": "カーソルを動かすと、サーバー駆動のリアクティビティが見られます。すべての視覚的な変化は SSE 経由で Go ハンドラーを通ります。",
+	"@msg6c474fd0c1450d76": {
+		"type": "text"
+	},
+	"msg92b7f0313afa09d6": "レイテンシ",
+	"@msg92b7f0313afa09d6": {
+		"type": "text"
+	},
+	"msgb2b13b2baddf9df9": "ライブ",
+	"@msgb2b13b2baddf9df9": {
+		"type": "text"
+	},
+	"msgc949fe3a738759d7": "パルス",
+	"@msgc949fe3a738759d7": {
+		"type": "text"
+	},
+	"msgf193004842edd5a2": "Go のためのサーバー駆動ハイパーメディア",
+	"@msgf193004842edd5a2": {
+		"type": "text"
+	},
+	"msgffb5de65e993a32e": "接続",
+	"@msgffb5de65e993a32e": {
+		"type": "text"
+	}
+}

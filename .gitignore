@@ -15,6 +15,16 @@ bun.lock
 # Generated files
 *_templ.go
 static/css/output.css
+# tokibundle/ is committed in full, unlike *_templ.go above.
+#
+# It looks generated and mostly is, but it cannot be rebuilt from what would be
+# left behind. bundle_gen.go holds the default locale, and toki reads it from
+# there — delete it and `toki generate` cannot even start, it asks for -l. And
+# it analyses Go source, which does not compile once the package the app
+# imports has gone. Ignoring it makes a fresh clone unrecoverable in a way
+# _templ.go never is: templ rebuilds from .templ files, needing nothing to
+# compile first.
+
 
 # go.work is created by `irgo app build/run android|ios` (gomobile needs it)
 go.work

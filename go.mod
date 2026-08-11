@@ -4,8 +4,10 @@ go 1.25.0
 
 require (
 	github.com/a-h/templ v0.3.977
+	github.com/go-playground/locales v0.14.1
 	github.com/stukennedy/irgo v0.4.0
 	github.com/syumai/workers v0.33.0
+	golang.org/x/text v0.40.0
 )
 
 require (
@@ -23,7 +25,7 @@ require (
 	golang.org/x/tools v0.48.0 // indirect
 )
 
-replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.9.0
+replace github.com/stukennedy/irgo => github.com/joeblew999/irgo v0.9.1
 
 tool (
 	github.com/stukennedy/irgo/cmd/irgo

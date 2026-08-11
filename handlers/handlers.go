@@ -3,8 +3,9 @@ package handlers
 import (
 	"time"
 
-	"irgo-demo/templates"
 	"github.com/stukennedy/irgo/pkg/router"
+	"irgo-demo/lang"
+	"irgo-demo/templates"
 )
 
 // The pulse count travels with the client as a Datastar signal rather than
@@ -23,7 +24,7 @@ func Mount(r *router.Router) {
 	r.DSGet("/api/init", func(ctx *router.Context) error {
 		sse := ctx.SSE()
 		// Send connection status (server-controlled)
-		sse.PatchTempl(templates.ConnectionStatus(true))
+		sse.PatchTempl(templates.ConnectionStatus(lang.For(ctx.Request), true))
 		return sse.PatchTempl(templates.PulseStats(0, 0))
 	})
 

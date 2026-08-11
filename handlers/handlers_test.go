@@ -3,8 +3,8 @@ package handlers_test
 import (
 	"testing"
 
-	"irgo-demo/app"
 	irgotest "github.com/stukennedy/irgo/pkg/testing"
+	"irgo-demo/app"
 )
 
 func TestHomePage(t *testing.T) {

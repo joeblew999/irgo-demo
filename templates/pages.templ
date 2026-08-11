@@ -3,9 +3,11 @@ package templates
 import (
 	"fmt"
 	"math"
+
+	"irgo-demo/tokibundle"
 )
 
-templ HomePage() {
+templ HomePage(t tokibundle.Reader) {
 	@FullscreenPage("Irgo + Datastar") {
 		<div
 			class="constellation-container"
@@ -45,30 +47,29 @@ templ HomePage() {
 						<span class="title-divider">×</span>
 						<span class="title-accent">Datastar</span>
 					</h1>
-					<p class="tagline">Server-driven hypermedia for Go</p>
+					<p class="tagline">{ t.String(`Server-driven hypermedia for Go`) }</p>
 				</header>
 
 				<div class="stats-panel glass-panel">
 					<div class="stat">
-						<span class="stat-label">Connection</span>
+						<span class="stat-label">{ t.String(`Connection`) }</span>
 						<span id="connection-status" class="stat-value">
-							@ConnectionStatus(false)
+							@ConnectionStatus(t, false)
 						</span>
 					</div>
 					<div class="stat">
-						<span class="stat-label">Pulses</span>
+						<span class="stat-label">{ t.String(`Pulses`) }</span>
 						<span id="pulse-count" class="stat-value mono">0</span>
 					</div>
 					<div class="stat">
-						<span class="stat-label">Latency</span>
+						<span class="stat-label">{ t.String(`Latency`) }</span>
 						<span id="latency" class="stat-value mono">0ms</span>
 					</div>
 				</div>
 
 				<div class="info-panel glass-panel">
 					<p class="info-text">
-						<strong>Move your cursor</strong> to see server-driven reactivity.
-						Every visual change flows through Go handlers via SSE.
+						{ t.String(`Move your cursor to see server-driven reactivity. Every visual change flows through Go handlers via SSE.`) }
 					</p>
 					<div class="tech-badges">
 						<span class="badge">Go</span>
@@ -98,13 +99,13 @@ templ HomePage() {
 }
 
 // ConnectionStatus renders the connection status indicator (server-controlled)
-templ ConnectionStatus(connected bool) {
+templ ConnectionStatus(t tokibundle.Reader, connected bool) {
 	<span id="connection-status" class={ "stat-value", templ.KV("connected", connected) }>
 		<span class={ "status-dot", templ.KV("active", connected) }></span>
 		if connected {
-			<span>Live</span>
+			<span>{ t.String(`Live`) }</span>
 		} else {
-			<span>Connecting...</span>
+			<span>{ t.String(`Connecting...`) }</span>
 		}
 	</span>
 }

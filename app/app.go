@@ -6,11 +6,12 @@ import (
 	"io/fs"
 	"net/http"
 
-	"irgo-demo/handlers"
-	"irgo-demo/static"
-	"irgo-demo/templates"
 	"github.com/stukennedy/irgo/pkg/render"
 	"github.com/stukennedy/irgo/pkg/router"
+	"irgo-demo/handlers"
+	"irgo-demo/lang"
+	"irgo-demo/static"
+	"irgo-demo/templates"
 )
 
 var Renderer = render.NewTemplRenderer()
@@ -25,7 +26,7 @@ func NewRouter() *router.Router {
 
 	// Home page
 	r.GET("/", func(ctx *router.Context) (string, error) {
-		return Renderer.Render(templates.HomePage())
+		return Renderer.Render(templates.HomePage(lang.For(ctx.Request)))
 	})
 
 	// Mount handlers
