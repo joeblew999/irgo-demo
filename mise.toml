@@ -23,6 +23,10 @@
 #   mise run android        the Android emulator
 #   mise run worker         a Cloudflare Worker
 
+[settings]
+# go.mod/go.work `toolchain` is the Go pin; this makes `mise install` honour it.
+idiomatic_version_file_enable_tools = ["go"]
+
 [tasks.dev]
 description = "Run the app with hot reload"
 run = "go tool irgo server dev"

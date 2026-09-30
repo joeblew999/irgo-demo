@@ -2,6 +2,8 @@ module irgo-demo
 
 go 1.26.5
 
+toolchain go1.27.1
+
 require (
 	github.com/a-h/templ v0.3.977
 	github.com/go-playground/locales v0.14.1
