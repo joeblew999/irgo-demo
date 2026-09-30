@@ -38,11 +38,10 @@ jobs:
       IRGO_ANDROID_KEY_ALIAS: ${{ secrets.IRGO_ANDROID_KEY_ALIAS }}
       IRGO_ANDROID_KEY_PASS: ${{ secrets.IRGO_ANDROID_KEY_PASS }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          version: 2026.9.15
-          cache: true
+          go-version-file: go.mod
       - name: Package
         if: env.IRGO_ANDROID_KEYSTORE_BASE64 != ''
         run: go tool irgo app package android
@@ -59,11 +58,10 @@ jobs:
     env:
       IRGO_IOS_TEAM: ${{ secrets.IRGO_IOS_TEAM }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          version: 2026.9.15
-          cache: true
+          go-version-file: go.mod
       # Signing needs a Distribution cert and provisioning profile in the
       # runner keychain — e.g. apple-actions/import-codesign-certs.
       - name: Package
@@ -88,11 +86,10 @@ jobs:
       IRGO_APPLE_PASSWORD: ${{ secrets.IRGO_APPLE_PASSWORD }}
       IRGO_MACOS_TEAM: ${{ secrets.IRGO_MACOS_TEAM }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          version: 2026.9.15
-          cache: true
+          go-version-file: go.mod
       - name: Package
         if: env.IRGO_MACOS_IDENTITY != ''
         run: go tool irgo app package macos --dmg
@@ -113,11 +110,10 @@ jobs:
       IRGO_WINDOWS_CERT_BASE64: ${{ secrets.IRGO_WINDOWS_CERT_BASE64 }}
       IRGO_WINDOWS_CERT_PASS: ${{ secrets.IRGO_WINDOWS_CERT_PASS }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          version: 2026.9.15
-          cache: true
+          go-version-file: go.mod
       # MakeAppx/signtool come from the Windows SDK, preinstalled on the runner.
       - name: Package
         if: env.IRGO_WINDOWS_PUBLISHER != ''
